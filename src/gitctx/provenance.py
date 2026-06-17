@@ -176,6 +176,43 @@ def validate_generated_label_record(record: Mapping[str, Any]) -> tuple[str, ...
     return tuple(errors)
 
 
+def validate_generated_label_matches_input(
+    label: Mapping[str, Any],
+    teacher_input: Mapping[str, Any],
+) -> tuple[str, ...]:
+    """Return validation errors for a generated label against its teacher input."""
+
+    errors = list(validate_generated_label_record(label))
+    for key in (
+        "source_repo_url",
+        "source_license",
+        "source_commit",
+        "parent_commit",
+        "data_split",
+        "changed_paths",
+        "teacher_model_id",
+        "teacher_runtime",
+        "teacher_runtime_model_id",
+        "teacher_revision",
+        "teacher_license",
+        "teacher_size",
+        "teacher_context_length",
+        "prompt_version",
+        "decoding_config",
+    ):
+        if label.get(key) != teacher_input.get(key):
+            errors.append(f"{key} does not match teacher input")
+
+    evidence_paths = label.get("evidence_paths")
+    changed_paths = teacher_input.get("changed_paths")
+    if isinstance(evidence_paths, list) and isinstance(changed_paths, list):
+        invalid = sorted(set(evidence_paths) - set(changed_paths))
+        if invalid:
+            errors.append(f"evidence_paths not present in changed_paths: {invalid}")
+
+    return tuple(errors)
+
+
 def validate_source_diff_record(record: Mapping[str, Any]) -> tuple[str, ...]:
     """Return validation errors for one extracted source-diff record."""
 

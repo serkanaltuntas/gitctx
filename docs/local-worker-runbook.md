@@ -147,3 +147,23 @@ The default smoke teacher identity is the local Ollama model
 `ollama/deepseek-r1:latest` with tag id `6995872bfe4c`. If the worker uses a
 different local tag, override the teacher metadata when creating inputs and add
 or update the matching teacher decision before keeping outputs.
+
+## Generate Smoke Labels With Ollama
+
+After teacher inputs are ready and Ollama has the approved local model, generate
+one label per input record:
+
+```bash
+make teacher-generate GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+make teacher-generate-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+```
+
+This writes:
+
+```text
+artifacts/teacher/generated-labels.smoke.jsonl
+artifacts/teacher/generated-labels.smoke.report.json
+```
+
+If the worker stops, rerun `make teacher-generate`; it resumes by skipping
+existing generated-label ids.

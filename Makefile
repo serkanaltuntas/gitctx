@@ -6,7 +6,7 @@ SMOKE_REPORT = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.report.json
 SMOKE_JSONL = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.jsonl
 REVIEWER ?= reviewer@example.com
 
-.PHONY: data-dir smoke smoke-check smoke-finalize smoke-review-template smoke-review-check teacher-inputs teacher-input-check test fixture-eval
+.PHONY: data-dir smoke smoke-check smoke-finalize smoke-review-template smoke-review-check teacher-inputs teacher-input-check teacher-generate teacher-generate-check test fixture-eval
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -44,6 +44,13 @@ teacher-inputs:
 
 teacher-input-check:
 	PYTHONPATH=src $(PYTHON) -m gitctx.teacher_inputs --data-dir "$(GITCTX_DATA_DIR)" validate-smoke
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
+
+teacher-generate:
+	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" generate-smoke
+
+teacher-generate-check:
+	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" validate-smoke
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 test:

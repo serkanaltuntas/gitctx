@@ -74,6 +74,8 @@ make smoke-review-template REVIEWER="reviewer@example.com"
 make smoke-review-check
 make teacher-inputs
 make teacher-input-check
+make teacher-generate
+make teacher-generate-check
 ```
 
 See:

@@ -19,6 +19,8 @@ SMOKE_JSONL = Path("artifacts/smoke/source-diffs.smoke.jsonl")
 SMOKE_REPORT = Path("artifacts/smoke/source-diffs.smoke.report.json")
 SMOKE_REVIEW = Path("reviews/source-diffs.smoke.review.jsonl")
 SMOKE_TEACHER_INPUTS = Path("artifacts/teacher/teacher-inputs.smoke.jsonl")
+SMOKE_GENERATED_LABELS = Path("artifacts/teacher/generated-labels.smoke.jsonl")
+SMOKE_GENERATED_REPORT = Path("artifacts/teacher/generated-labels.smoke.report.json")
 SMOKE_MANIFEST = Path("manifests/source-manifest.audit.jsonl")
 GITCTX_COMMIT = Path("lineage/gitctx-public-commit.txt")
 CHECKSUMS = Path("checksums/sha256.txt")
@@ -183,6 +185,10 @@ def write_checksums(data_dir: str | Path) -> Path:
         paths.append(SMOKE_REVIEW)
     if (data_dir / SMOKE_TEACHER_INPUTS).exists():
         paths.append(SMOKE_TEACHER_INPUTS)
+    if (data_dir / SMOKE_GENERATED_LABELS).exists():
+        paths.append(SMOKE_GENERATED_LABELS)
+    if (data_dir / SMOKE_GENERATED_REPORT).exists():
+        paths.append(SMOKE_GENERATED_REPORT)
     lines = []
     for relative_path in paths:
         digest = _sha256(data_dir / relative_path)

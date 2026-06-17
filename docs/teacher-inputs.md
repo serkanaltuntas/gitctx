@@ -47,3 +47,14 @@ Validate and refresh checksums:
 ```bash
 make teacher-input-check
 ```
+
+Generate labels with local Ollama:
+
+```bash
+make teacher-generate
+make teacher-generate-check
+```
+
+Generation sends one teacher input record per Ollama call. Do not batch many
+diffs into one prompt; per-record calls keep provenance, validation, retries,
+and resume behavior clean.

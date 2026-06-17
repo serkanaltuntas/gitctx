@@ -1,0 +1,113 @@
+import json
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import tempfile
+from pathlib import Path
+from threading import Thread
+import unittest
+
+from gitctx.ollama_generate import generate_smoke_labels, validate_smoke_generated_labels
+
+
+class OllamaGenerateTests(unittest.TestCase):
+    def test_generates_and_validates_label_with_fake_ollama(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root)
+            server, thread = self._start_fake_ollama()
+            try:
+                report = generate_smoke_labels(
+                    root,
+                    ollama_url=f"http://127.0.0.1:{server.server_port}",
+                    resume=False,
+                )
+                summary = validate_smoke_generated_labels(root)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+            self.assertEqual(report["generated_records"], 1)
+            self.assertEqual(summary["generated_label_records"], 1)
+            label = json.loads(
+                (root / "artifacts/teacher/generated-labels.smoke.jsonl").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(label["header"], "fix(parser): handle empty values")
+            self.assertEqual(label["teacher_runtime_model_id"], "deepseek-r1:latest")
+            self.assertEqual(label["human_review_status"], "not_reviewed")
+
+    def _write_teacher_inputs(self, root: Path) -> None:
+        (root / "artifacts/teacher").mkdir(parents=True)
+        record = {
+            "id": "teacher-input-example-repo-111111111111",
+            "source_diff_id": "example-repo-111111111111",
+            "review_decision_id": "review-example-repo-111111111111",
+            "source_repo_url": "https://github.com/example/repo",
+            "source_license": "MIT",
+            "source_commit": "1111111111111111111111111111111111111111",
+            "parent_commit": "0000000000000000000000000000000000000000",
+            "data_split": "DEV",
+            "changed_paths": ["src/parser.py", "tests/test_parser.py"],
+            "diff_stat": " src/parser.py | 2 +-",
+            "historical_subject": "fix parser",
+            "teacher_model_id": "ollama/deepseek-r1:latest",
+            "teacher_runtime": "ollama",
+            "teacher_runtime_model_id": "deepseek-r1:latest",
+            "teacher_revision": "6995872bfe4c",
+            "teacher_license": "MIT",
+            "teacher_size": "5.2 GB",
+            "teacher_context_length": "128K",
+            "prompt_version": "commit-message-teacher-v0.1",
+            "prompt_path": "prompts/commit-message-teacher-v0.1.md",
+            "decoding_config": {"temperature": 0.0, "top_p": 1.0, "max_new_tokens": 256},
+            "system_message": "Return JSON only.",
+            "user_message": "Generate one Conventional Commit message.",
+            "diff": "diff --git a/src/parser.py b/src/parser.py\n",
+            "diff_sha256": "0" * 64,
+            "input_status": "ready_for_generation",
+        }
+        (root / "artifacts/teacher/teacher-inputs.smoke.jsonl").write_text(
+            json.dumps(record) + "\n",
+            encoding="utf-8",
+        )
+
+    def _start_fake_ollama(self) -> tuple[HTTPServer, Thread]:
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:  # noqa: N802 - stdlib callback.
+                length = int(self.headers["Content-Length"])
+                self.rfile.read(length)
+                payload = {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "header": "fix(parser): handle empty values",
+                                "body": [],
+                                "footers": [],
+                                "type": "fix",
+                                "scope": "parser",
+                                "confidence": 0.9,
+                                "warnings": [],
+                                "evidence_paths": ["src/parser.py", "tests/test_parser.py"],
+                            }
+                        )
+                    }
+                }
+                body = json.dumps(payload).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format: str, *args: object) -> None:
+                return
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        return server, thread
+
+
+if __name__ == "__main__":
+    unittest.main()
