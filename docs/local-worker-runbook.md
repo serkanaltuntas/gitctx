@@ -19,17 +19,16 @@ not name private hardware, hostnames, or personal machine details.
 
 ## Data Directory
 
-Set a data directory outside the gitctx source repository:
+The Makefile uses a data directory outside the gitctx source repository:
 
 ```bash
-export GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
-mkdir -p "$GITCTX_DATA_DIR"
+make data-dir
 ```
 
 Expected layout:
 
 ```text
-$GITCTX_DATA_DIR/
+$(GITCTX_DATA_DIR)/
   sources/
     github.com/
       owner/repo/
@@ -58,27 +57,32 @@ python -m pip install -e .
 Run:
 
 ```bash
-python -m gitctx.worker_smoke \
-  --manifest manifests/source-manifest.audit.jsonl \
-  --data-dir "$GITCTX_DATA_DIR" \
-  --records 50
+make smoke
 ```
 
 Outputs:
 
-- `$GITCTX_DATA_DIR/artifacts/smoke/source-diffs.smoke.jsonl`
-- `$GITCTX_DATA_DIR/artifacts/smoke/source-diffs.smoke.report.json`
+- `$(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.jsonl`
+- `$(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.report.json`
 
 The smoke artifact contains commit metadata, changed paths, diffstat, and
 historical subjects. It does not contain full diff text.
+
+Override defaults when needed:
+
+```bash
+make smoke GITCTX_DATA_DIR="$HOME/work/gitctx-data" SMOKE_RECORDS=25
+```
+
+Use `PYTHON=python` if your virtual environment exposes `python` but not
+`python3`.
 
 ## After The Run
 
 Review the report first:
 
 ```bash
-python -m json.tool "$GITCTX_DATA_DIR/artifacts/smoke/source-diffs.smoke.report.json"
-wc -l "$GITCTX_DATA_DIR/artifacts/smoke/source-diffs.smoke.jsonl"
+make smoke-check
 ```
 
 Then send the report and smoke JSONL back to the control workstation for review.

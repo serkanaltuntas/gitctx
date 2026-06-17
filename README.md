@@ -64,6 +64,13 @@ Run the first deterministic fixture evaluation:
 PYTHONPATH=src python3 -m gitctx.eval fixtures/dev/commit_message_cases.jsonl
 ```
 
+Run local source-diff smoke extraction:
+
+```bash
+make smoke
+make smoke-check
+```
+
 See:
 
 - [docs/model-plan.md](docs/model-plan.md)
