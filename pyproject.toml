@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gitctx"
+version = "0.0.0"
+description = "Model-first Conventional Commit generation from Git context."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [
+  { name = "Serkan Altuntas", email = "serkan@altuntas.dev" },
+]
+keywords = ["git", "conventional-commits", "machine-learning", "developer-tools"]
+classifiers = [
+  "Development Status :: 1 - Planning",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Version Control :: Git",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://gitctx.com"
+Repository = "https://github.com/serkanaltuntas/gitctx"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gitctx"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
