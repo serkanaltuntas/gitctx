@@ -1,6 +1,14 @@
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 
-from gitctx.conventional import CommitContext, parse_commit_message, score_commit_message
+from gitctx.conventional import (
+    CommitContext,
+    parse_commit_message,
+    run_fixture_cases,
+    score_commit_message,
+)
+from gitctx.eval import main as eval_main
 
 
 class ConventionalCommitParserTests(unittest.TestCase):
@@ -19,6 +27,16 @@ class ConventionalCommitParserTests(unittest.TestCase):
 
         self.assertTrue(parsed.breaking)
         self.assertEqual(parsed.footers, ("BREAKING CHANGE: callers must pass project_id",))
+
+    def test_preserves_body(self) -> None:
+        parsed = parse_commit_message(
+            "refactor(core): split parser stages\n\n"
+            "The parser now separates header and footer handling so future scorers can\n"
+            "inspect each part independently."
+        )
+
+        self.assertEqual(len(parsed.body), 3)
+        self.assertEqual(parsed.footers, ())
 
     def test_rejects_invalid_header(self) -> None:
         with self.assertRaises(ValueError):
@@ -64,6 +82,42 @@ class ConventionalCommitScorerTests(unittest.TestCase):
         )
 
         self.assertTrue(score.breaking_change_detection)
+
+    def test_scores_expected_body_and_footer(self) -> None:
+        score = score_commit_message(
+            "feat(api): require project id\n\n"
+            "Calls must provide project_id before request validation can pass.\n\n"
+            "Refs: #123",
+            CommitContext(expect_body=True, expect_footer=True),
+        )
+
+        self.assertTrue(score.body_presence)
+        self.assertTrue(score.footer_presence)
+
+    def test_scores_missing_expected_body(self) -> None:
+        score = score_commit_message(
+            "refactor(core): split parser stages",
+            CommitContext(expect_body=True),
+        )
+
+        self.assertFalse(score.body_presence)
+        self.assertIn("expected commit body", score.errors)
+
+
+class FixtureRunnerTests(unittest.TestCase):
+    def test_dev_fixture_cases_pass(self) -> None:
+        passed, failures = run_fixture_cases("fixtures/dev/commit_message_cases.jsonl")
+
+        self.assertGreaterEqual(passed, 1)
+        self.assertEqual(failures, [])
+
+    def test_eval_main_returns_success(self) -> None:
+        output = StringIO()
+        with redirect_stdout(output):
+            exit_code = eval_main(["fixtures/dev/commit_message_cases.jsonl"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("10 passed", output.getvalue())
 
 
 if __name__ == "__main__":

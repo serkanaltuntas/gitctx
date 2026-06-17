@@ -3,3 +3,8 @@
 {"id":"vague_subject","split":"DEV","message":"fix: update","context":{},"expected":{"format_validity":true,"specificity":false}}
 {"id":"breaking_change","split":"DEV","message":"feat(api)!: change request schema","context":{"expect_breaking_change":true},"expected":{"breaking_change_detection":true}}
 {"id":"forbidden_claim","split":"DEV","message":"feat(auth): add OAuth login","context":{"forbidden_claims":["OAuth"]},"expected":{"factuality":false}}
+{"id":"body_required","split":"DEV","message":"refactor(core): split parser stages\n\nThe parser now separates header and footer handling so future scorers can inspect each part independently.","context":{"expect_body":true},"expected":{"format_validity":true,"body_presence":true}}
+{"id":"body_missing","split":"DEV","message":"refactor(core): split parser stages","context":{"expect_body":true},"expected":{"format_validity":true,"body_presence":false}}
+{"id":"footer_required","split":"DEV","message":"feat(api): require project id\n\nCalls must provide project_id before request validation can pass.\n\nRefs: #123","context":{"expect_body":true,"expect_footer":true},"expected":{"body_presence":true,"footer_presence":true}}
+{"id":"mixed_change_warning","split":"DEV","message":"chore: split mixed docs and parser changes into separate commits","context":{"expect_mixed_change_warning":true},"expected":{"mixed_change_warning":true}}
+{"id":"too_long_subject","split":"DEV","message":"docs: update the complete installation documentation with every platform-specific bootstrap step","context":{},"expected":{"format_validity":true,"brevity":false}}

@@ -58,6 +58,12 @@ Run the current dependency-free test suite:
 PYTHONPATH=src python3 -m unittest discover -s tests
 ```
 
+Run the first deterministic fixture evaluation:
+
+```bash
+PYTHONPATH=src python3 -m gitctx.eval fixtures/dev/commit_message_cases.jsonl
+```
+
 See:
 
 - [docs/model-plan.md](docs/model-plan.md)

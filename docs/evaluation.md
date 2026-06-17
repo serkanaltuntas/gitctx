@@ -35,7 +35,8 @@ Core functions:
 - `parse_commit_message(message)` parses a strict Conventional Commit header.
 - `score_commit_message(message, context)` returns deterministic signals for
   format validity, type accuracy, scope quality, factuality, specificity,
-  brevity, mixed-change warnings, and breaking-change markers.
+  brevity, body presence, footer presence, mixed-change warnings, and
+  breaking-change markers.
 
 The first fixture format is JSONL:
 
@@ -60,6 +61,20 @@ The first fixture format is JSONL:
 ```
 
 The initial fixture file is `fixtures/dev/commit_message_cases.jsonl`.
+
+Run the fixture scorer:
+
+```bash
+PYTHONPATH=src python3 -m gitctx.eval fixtures/dev/commit_message_cases.jsonl
+```
+
+Expected output shape:
+
+```text
+10 cases
+10 passed
+0 failed
+```
 
 ## Release Gates
 

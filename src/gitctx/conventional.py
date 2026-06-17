@@ -9,7 +9,9 @@ grounded.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 import re
+from pathlib import Path
 from typing import Iterable
 
 HEADER_RE = re.compile(
@@ -70,6 +72,8 @@ class CommitContext:
     changed_paths: tuple[str, ...] = ()
     expected_type: str | None = None
     expected_scope: str | None = None
+    expect_body: bool = False
+    expect_footer: bool = False
     expect_mixed_change_warning: bool = False
     expect_breaking_change: bool = False
     forbidden_claims: tuple[str, ...] = ()
@@ -85,6 +89,8 @@ class CommitScore:
     factuality: bool | None
     specificity: bool
     brevity: bool
+    body_presence: bool | None
+    footer_presence: bool | None
     mixed_change_warning: bool | None
     breaking_change_detection: bool | None
     parsed: ParsedCommit | None = None
@@ -160,6 +166,8 @@ def score_commit_message(
             factuality=False if context.forbidden_claims else None,
             specificity=False,
             brevity=False,
+            body_presence=False if context.expect_body else None,
+            footer_presence=False if context.expect_footer else None,
             mixed_change_warning=False if context.expect_mixed_change_warning else None,
             breaking_change_detection=False if context.expect_breaking_change else None,
             errors=(str(exc),),
@@ -183,6 +191,18 @@ def score_commit_message(
     brevity = 0 < len(parsed.subject) <= max_subject_length
     if not brevity:
         errors.append("subject length is outside the configured limit")
+
+    body_presence = None
+    if context.expect_body:
+        body_presence = _has_body(parsed)
+        if not body_presence:
+            errors.append("expected commit body")
+
+    footer_presence = None
+    if context.expect_footer:
+        footer_presence = bool(parsed.footers)
+        if not footer_presence:
+            errors.append("expected commit footer")
 
     mixed_change_warning = None
     if context.expect_mixed_change_warning:
@@ -208,6 +228,8 @@ def score_commit_message(
         factuality=factuality,
         specificity=specificity,
         brevity=brevity,
+        body_presence=body_presence,
+        footer_presence=footer_presence,
         mixed_change_warning=mixed_change_warning,
         breaking_change_detection=breaking_change_detection,
         parsed=parsed,
@@ -263,3 +285,43 @@ def _is_specific(subject: str) -> bool:
 def _mentions_mixed_change(parsed: ParsedCommit) -> bool:
     text = parsed.raw.lower()
     return "mixed" in text or "split" in text or "separate commit" in text
+
+
+def _has_body(parsed: ParsedCommit) -> bool:
+    return any(line.strip() for line in parsed.body)
+
+
+def load_fixture_cases(path: str | Path) -> list[dict]:
+    """Load JSONL fixture cases."""
+
+    cases = []
+    with Path(path).open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                cases.append(json.loads(stripped))
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{path}:{line_number}: invalid JSON") from exc
+    return cases
+
+
+def run_fixture_cases(path: str | Path) -> tuple[int, list[str]]:
+    """Run scorer fixtures and return ``(passed, failures)``."""
+
+    failures: list[str] = []
+    passed = 0
+    for case in load_fixture_cases(path):
+        context = CommitContext(**case.get("context", {}))
+        score = score_commit_message(case["message"], context)
+        case_failures = []
+        for key, expected in case.get("expected", {}).items():
+            actual = getattr(score, key)
+            if actual != expected:
+                case_failures.append(f"{key}: expected {expected!r}, got {actual!r}")
+        if case_failures:
+            failures.append(f"{case['id']}: " + "; ".join(case_failures))
+        else:
+            passed += 1
+    return passed, failures
