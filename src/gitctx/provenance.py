@@ -35,6 +35,13 @@ SOURCE_DIFF_REVIEW_STATUSES = frozenset(
         "rejected",
     }
 )
+SOURCE_DIFF_DECISIONS = frozenset(
+    {
+        "needs_review",
+        "accepted_for_teacher_labeling",
+        "rejected",
+    }
+)
 HUMAN_REVIEW_STATUSES = frozenset(
     {
         "not_reviewed",
@@ -194,6 +201,48 @@ def validate_source_diff_record(record: Mapping[str, Any]) -> tuple[str, ...]:
     diff_stat = record.get("diff_stat")
     if not isinstance(diff_stat, str):
         errors.append("diff_stat must be a string")
+
+    return tuple(errors)
+
+
+def validate_source_diff_review_decision(record: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return validation errors for one source-diff review decision."""
+
+    errors: list[str] = []
+
+    for key in (
+        "id",
+        "source_diff_id",
+        "source_repo_url",
+        "source_commit",
+        "parent_commit",
+        "data_split",
+        "decision",
+        "reviewer",
+        "review_timestamp",
+        "review_protocol",
+    ):
+        _require_str(record, key, errors)
+
+    data_split = record.get("data_split")
+    if isinstance(data_split, str) and data_split not in DATA_SPLITS:
+        errors.append(f"invalid data_split: {data_split}")
+
+    decision = record.get("decision")
+    if isinstance(decision, str) and decision not in SOURCE_DIFF_DECISIONS:
+        errors.append(f"invalid decision: {decision}")
+
+    for key in ("source_commit", "parent_commit"):
+        value = record.get(key)
+        if isinstance(value, str) and not _HEX_REVISION_RE.match(value):
+            errors.append(f"{key} must be a 7-40 character lowercase hex revision")
+
+    _require_list(record, "changed_paths", errors, min_items=1)
+    _require_list(record, "reasons", errors)
+
+    notes = record.get("notes")
+    if not isinstance(notes, str):
+        errors.append("notes must be a string")
 
     return tuple(errors)
 

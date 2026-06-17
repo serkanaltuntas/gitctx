@@ -4,8 +4,9 @@ SMOKE_MANIFEST ?= manifests/source-manifest.audit.jsonl
 SMOKE_RECORDS ?= 50
 SMOKE_REPORT = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.report.json
 SMOKE_JSONL = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.jsonl
+REVIEWER ?= reviewer@example.com
 
-.PHONY: data-dir smoke smoke-check test fixture-eval
+.PHONY: data-dir smoke smoke-check smoke-finalize smoke-review-template smoke-review-check test fixture-eval
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -30,6 +31,13 @@ smoke-checksum:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 smoke-finalize: smoke-normalize smoke-validate smoke-checksum
+
+smoke-review-template:
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" create-smoke-review-template --reviewer "$(REVIEWER)"
+
+smoke-review-check:
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-smoke-review
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 test:
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests

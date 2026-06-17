@@ -70,6 +70,8 @@ Run local source-diff smoke extraction:
 make smoke
 make smoke-check
 make smoke-finalize
+make smoke-review-template REVIEWER="reviewer@example.com"
+make smoke-review-check
 ```
 
 See:
@@ -77,6 +79,7 @@ See:
 - [docs/model-plan.md](docs/model-plan.md)
 - [docs/data-and-distillation.md](docs/data-and-distillation.md)
 - [docs/source-manifest.md](docs/source-manifest.md)
+- [docs/source-diff-review.md](docs/source-diff-review.md)
 - [docs/local-worker-runbook.md](docs/local-worker-runbook.md)
 - [docs/teacher-model-shortlist.md](docs/teacher-model-shortlist.md)
 - [docs/teacher-audit-plan.md](docs/teacher-audit-plan.md)

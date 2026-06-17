@@ -3,6 +3,7 @@ import unittest
 from gitctx.provenance import (
     load_jsonl,
     validate_generated_label_record,
+    validate_source_diff_review_decision,
     validate_source_manifest_entry,
 )
 
@@ -45,6 +46,22 @@ class GeneratedLabelValidationTests(unittest.TestCase):
         errors = validate_generated_label_record(record)
 
         self.assertIn("teacher-generated labels must not be stored as HELD_OUT labels", errors)
+
+
+class SourceDiffReviewValidationTests(unittest.TestCase):
+    def test_example_source_diff_review_is_valid(self) -> None:
+        records = load_jsonl("examples/source-diff-review.example.jsonl")
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(validate_source_diff_review_decision(records[0]), ())
+
+    def test_rejects_unknown_decision(self) -> None:
+        record = load_jsonl("examples/source-diff-review.example.jsonl")[0]
+        record["decision"] = "maybe"
+
+        errors = validate_source_diff_review_decision(record)
+
+        self.assertIn("invalid decision: maybe", errors)
 
 
 if __name__ == "__main__":

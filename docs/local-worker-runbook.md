@@ -104,3 +104,27 @@ cd "$HOME/LAB/gitctx-data"
 git status --short --ignored
 git diff -- artifacts/smoke/source-diffs.smoke.report.json checksums/sha256.txt
 ```
+
+## Prepare Smoke Review Decisions
+
+After the smoke artifact is committed to the private data repository, create a
+separate review-decision JSONL template. Keep this file private until the
+source redistribution and data-card review says otherwise.
+
+```bash
+make smoke-review-template \
+  GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" \
+  REVIEWER="reviewer@example.com"
+```
+
+Edit `reviews/source-diffs.smoke.review.jsonl` in the private data repository.
+Each source-diff record starts as `needs_review`. Change it to
+`accepted_for_teacher_labeling` only when the diff is small/coherent enough for
+the first teacher-label audit. Use `rejected` for noisy, oversized, generated,
+vendor, formatting-only, or ambiguous changes.
+
+Then validate and refresh checksums:
+
+```bash
+make smoke-review-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+```
