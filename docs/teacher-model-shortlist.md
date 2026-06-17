@@ -27,6 +27,9 @@ Start with a small audit using a teacher whose license explicitly permits
 distillation. Do not run large-scale generation until prompts, verifier filters,
 and provenance records have passed the 1K-5K audit sample.
 
+The first bounded audit decision is recorded in
+[`teacher-decisions/deepseek-r1-0528-audit.md`](teacher-decisions/deepseek-r1-0528-audit.md).
+
 ## Candidate Table
 
 | Candidate | License signal | Output/distillation decision | Status |
@@ -51,9 +54,10 @@ and provenance records have passed the 1K-5K audit sample.
 
 ## First Audit Recommendation
 
-Use `deepseek-ai/DeepSeek-R1-0528` if local or rented compute can run it
-reasonably. If not, use the smallest DeepSeek R1 variant or a Qwen2.5-Coder
-model only after the output-use decision is recorded.
+Use `deepseek-ai/DeepSeek-R1-0528` for the first bounded audit if local or
+rented compute can run it reasonably. If not, create a new decision record for
+the smallest DeepSeek R1 variant or a Qwen2.5-Coder model before keeping any
+labels.
 
 Audit target:
 
@@ -81,4 +85,3 @@ redistribution_of_outputs_allowed: yes | no | unclear
 notes:
 decision: approved_for_audit | approved_for_training | rejected | pending
 ```
-

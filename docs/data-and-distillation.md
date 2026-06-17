@@ -40,6 +40,11 @@ inconsistent, or unrelated to the actual diff.
 The initial teacher shortlist is tracked in
 [`teacher-model-shortlist.md`](teacher-model-shortlist.md).
 
+The first audit decision is tracked in
+[`teacher-decisions/deepseek-r1-0528-audit.md`](teacher-decisions/deepseek-r1-0528-audit.md),
+and the audit workflow is tracked in
+[`teacher-audit-plan.md`](teacher-audit-plan.md).
+
 ## Required Provenance
 
 Every generated label must record:
