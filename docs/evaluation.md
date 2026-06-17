@@ -26,6 +26,41 @@ gitctx needs repo-shaped evaluations, not general language benchmarks.
 Exact match against historical commit messages is not enough. Many different
 messages can correctly describe the same diff.
 
+## First Scorer API
+
+The first deterministic scorer lives in `src/gitctx/conventional.py`.
+
+Core functions:
+
+- `parse_commit_message(message)` parses a strict Conventional Commit header.
+- `score_commit_message(message, context)` returns deterministic signals for
+  format validity, type accuracy, scope quality, factuality, specificity,
+  brevity, mixed-change warnings, and breaking-change markers.
+
+The first fixture format is JSONL:
+
+```json
+{
+  "id": "valid_scoped_fix",
+  "split": "DEV",
+  "message": "fix(parser): reject malformed headers",
+  "context": {
+    "changed_paths": ["src/gitctx/parser.py"],
+    "expected_type": "fix",
+    "expected_scope": "parser"
+  },
+  "expected": {
+    "format_validity": true,
+    "type_accuracy": true,
+    "scope_quality": true,
+    "specificity": true,
+    "brevity": true
+  }
+}
+```
+
+The initial fixture file is `fixtures/dev/commit_message_cases.jsonl`.
+
 ## Release Gates
 
 | Gate | Requirement |
@@ -37,4 +72,3 @@ messages can correctly describe the same diff.
 | GCTX-E | 60M-100M model beats the template baseline on `REPORT` |
 | GCTX-F | 150M-300M model reaches public-beta threshold |
 | GCTX-G | Model card, data card, eval card, and held-out pass are signed |
-

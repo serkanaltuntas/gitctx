@@ -1,0 +1,5 @@
+{"id":"valid_scoped_fix","split":"DEV","message":"fix(parser): reject malformed headers","context":{"changed_paths":["src/gitctx/parser.py"],"expected_type":"fix","expected_scope":"parser"},"expected":{"format_validity":true,"type_accuracy":true,"scope_quality":true,"specificity":true,"brevity":true}}
+{"id":"invalid_header","split":"DEV","message":"fix parser missing colon","context":{},"expected":{"format_validity":false}}
+{"id":"vague_subject","split":"DEV","message":"fix: update","context":{},"expected":{"format_validity":true,"specificity":false}}
+{"id":"breaking_change","split":"DEV","message":"feat(api)!: change request schema","context":{"expect_breaking_change":true},"expected":{"breaking_change_detection":true}}
+{"id":"forbidden_claim","split":"DEV","message":"feat(auth): add OAuth login","context":{"forbidden_claims":["OAuth"]},"expected":{"factuality":false}}

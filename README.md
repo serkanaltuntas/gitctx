@@ -50,6 +50,14 @@ thin CLI wrapper.
 6. Publish model, data, and eval cards.
 7. Package the CLI around a useful local model.
 
+## Development
+
+Run the current dependency-free test suite:
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests
+```
+
 See:
 
 - [docs/model-plan.md](docs/model-plan.md)
