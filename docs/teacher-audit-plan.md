@@ -38,7 +38,9 @@ poor enough that more generation would only create cleanup work.
 
 ## Teacher
 
-The first approved audit teacher is recorded in
+The first approved local smoke teacher is recorded in
+[`teacher-decisions/ollama-deepseek-r1-latest-smoke.md`](teacher-decisions/ollama-deepseek-r1-latest-smoke.md).
+The larger audit teacher option is recorded in
 [`teacher-decisions/deepseek-r1-0528-audit.md`](teacher-decisions/deepseek-r1-0528-audit.md).
 
 No other teacher may generate kept labels until it has its own decision record.

@@ -13,8 +13,12 @@
     "data_split",
     "changed_paths",
     "teacher_model_id",
+    "teacher_runtime",
+    "teacher_runtime_model_id",
     "teacher_revision",
     "teacher_license",
+    "teacher_size",
+    "teacher_context_length",
     "prompt_version",
     "decoding_config",
     "generation_timestamp",
@@ -66,11 +70,27 @@
       "type": "string",
       "minLength": 1
     },
+    "teacher_runtime": {
+      "type": "string",
+      "minLength": 1
+    },
+    "teacher_runtime_model_id": {
+      "type": "string",
+      "minLength": 1
+    },
     "teacher_revision": {
       "type": "string",
-      "pattern": "^[0-9a-f]{7,40}$"
+      "pattern": "^[0-9a-f]{7,64}$"
     },
     "teacher_license": {
+      "type": "string",
+      "minLength": 1
+    },
+    "teacher_size": {
+      "type": "string",
+      "minLength": 1
+    },
+    "teacher_context_length": {
       "type": "string",
       "minLength": 1
     },

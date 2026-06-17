@@ -116,8 +116,12 @@ def validate_generated_label_record(record: Mapping[str, Any]) -> tuple[str, ...
         "parent_commit",
         "data_split",
         "teacher_model_id",
+        "teacher_runtime",
+        "teacher_runtime_model_id",
         "teacher_revision",
         "teacher_license",
+        "teacher_size",
+        "teacher_context_length",
         "prompt_version",
         "generation_timestamp",
         "header",
@@ -133,7 +137,10 @@ def validate_generated_label_record(record: Mapping[str, Any]) -> tuple[str, ...
 
     for key in ("source_commit", "parent_commit", "teacher_revision"):
         value = record.get(key)
-        if isinstance(value, str) and not _HEX_REVISION_RE.match(value):
+        if isinstance(value, str) and key == "teacher_revision":
+            if not re.match(r"^[0-9a-f]{7,64}$", value):
+                errors.append(f"{key} must be a 7-64 character lowercase hex revision")
+        elif isinstance(value, str) and not _HEX_REVISION_RE.match(value):
             errors.append(f"{key} must be a 7-40 character lowercase hex revision")
 
     prompt_version = record.get("prompt_version")

@@ -86,6 +86,7 @@ See:
 - [docs/local-worker-runbook.md](docs/local-worker-runbook.md)
 - [docs/teacher-model-shortlist.md](docs/teacher-model-shortlist.md)
 - [docs/teacher-audit-plan.md](docs/teacher-audit-plan.md)
+- [docs/teacher-decisions/ollama-deepseek-r1-latest-smoke.md](docs/teacher-decisions/ollama-deepseek-r1-latest-smoke.md)
 - [docs/evaluation.md](docs/evaluation.md)
 - [docs/open-source-standard.md](docs/open-source-standard.md)
 - [docs/release-checklist.md](docs/release-checklist.md)

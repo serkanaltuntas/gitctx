@@ -27,13 +27,17 @@ Start with a small audit using a teacher whose license explicitly permits
 distillation. Do not run large-scale generation until prompts, verifier filters,
 and provenance records have passed the 1K-5K audit sample.
 
-The first bounded audit decision is recorded in
+The first local smoke decision is recorded in
+[`teacher-decisions/ollama-deepseek-r1-latest-smoke.md`](teacher-decisions/ollama-deepseek-r1-latest-smoke.md).
+The larger DeepSeek-R1-0528 audit decision remains available as a higher-cost
+quality anchor in
 [`teacher-decisions/deepseek-r1-0528-audit.md`](teacher-decisions/deepseek-r1-0528-audit.md).
 
 ## Candidate Table
 
 | Candidate | License signal | Output/distillation decision | Status |
 |---|---|---|---|
+| `ollama/deepseek-r1:latest` | MIT license signal; local Ollama model tag `6995872bfe4c` | Approved for the 17-record local smoke audit only | First smoke teacher |
 | `deepseek-ai/DeepSeek-R1-0528` | MIT license; model card says DeepSeek-R1 series supports commercial use and distillation | Approved for local audit after recording exact artifact hash and prompt version | Preferred first teacher candidate |
 | `deepseek-ai/DeepSeek-R1` | MIT license; model card says derivative work including distillation is allowed | Approved for local audit if `0528` is unavailable or too costly | Backup first teacher candidate |
 | `Qwen/Qwen2.5-Coder-32B-Instruct` | Apache-2.0 model license | Candidate, but record an explicit output-use decision before labels are kept | Strong code teacher candidate |
@@ -54,10 +58,9 @@ The first bounded audit decision is recorded in
 
 ## First Audit Recommendation
 
-Use `deepseek-ai/DeepSeek-R1-0528` for the first bounded audit if local or
-rented compute can run it reasonably. If not, create a new decision record for
-the smallest DeepSeek R1 variant or a Qwen2.5-Coder model before keeping any
-labels.
+Use `ollama/deepseek-r1:latest` for the first 17-record local smoke run. Use
+`deepseek-ai/DeepSeek-R1-0528` as the larger quality anchor if the local smoke
+teacher fails JSON validity, factuality, or human-review quality.
 
 Audit target:
 

@@ -142,3 +142,8 @@ make teacher-input-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
 This writes `artifacts/teacher/teacher-inputs.smoke.jsonl` in the private data
 repository. It includes full diff text and must remain private until a later
 data-card and redistribution review approves any public release shape.
+
+The default smoke teacher identity is the local Ollama model
+`ollama/deepseek-r1:latest` with tag id `6995872bfe4c`. If the worker uses a
+different local tag, override the teacher metadata when creating inputs and add
+or update the matching teacher decision before keeping outputs.

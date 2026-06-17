@@ -7,13 +7,17 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
-from typing import Any
+from typing import Any, NamedTuple
 
 from gitctx.provenance import load_jsonl, validate_teacher_input_record
 
-TEACHER_MODEL_ID = "deepseek-ai/DeepSeek-R1-0528"
-TEACHER_REVISION = "4236a6af538feda4548eca9ab308586007567f52"
-TEACHER_LICENSE = "MIT"
+DEFAULT_TEACHER_MODEL_ID = "ollama/deepseek-r1:latest"
+DEFAULT_TEACHER_RUNTIME = "ollama"
+DEFAULT_TEACHER_RUNTIME_MODEL_ID = "deepseek-r1:latest"
+DEFAULT_TEACHER_REVISION = "6995872bfe4c"
+DEFAULT_TEACHER_LICENSE = "MIT"
+DEFAULT_TEACHER_SIZE = "5.2 GB"
+DEFAULT_TEACHER_CONTEXT_LENGTH = "128K"
 PROMPT_VERSION = "commit-message-teacher-v0.1"
 PROMPT_PATH = Path("prompts/commit-message-teacher-v0.1.md")
 DECODING_CONFIG = {
@@ -27,14 +31,26 @@ SMOKE_REVIEW = Path("reviews/source-diffs.smoke.review.jsonl")
 SMOKE_TEACHER_INPUTS = Path("artifacts/teacher/teacher-inputs.smoke.jsonl")
 
 
+class TeacherConfig(NamedTuple):
+    model_id: str
+    runtime: str
+    runtime_model_id: str
+    revision: str
+    license: str
+    size: str
+    context_length: str
+
+
 def create_smoke_teacher_inputs(
     data_dir: str | Path,
     *,
     prompt_path: str | Path = PROMPT_PATH,
+    teacher_config: TeacherConfig | None = None,
 ) -> Path:
     """Write teacher input prompts for accepted smoke source diffs."""
 
     data_dir = Path(data_dir)
+    teacher_config = teacher_config or default_teacher_config()
     prompt = _load_prompt_template(prompt_path)
     source_records = load_jsonl(data_dir / SMOKE_SOURCE_DIFFS)
     review_records = load_jsonl(data_dir / SMOKE_REVIEW)
@@ -73,9 +89,13 @@ def create_smoke_teacher_inputs(
                 "changed_paths": source["changed_paths"],
                 "diff_stat": source["diff_stat"],
                 "historical_subject": source["historical_subject"],
-                "teacher_model_id": TEACHER_MODEL_ID,
-                "teacher_revision": TEACHER_REVISION,
-                "teacher_license": TEACHER_LICENSE,
+                "teacher_model_id": teacher_config.model_id,
+                "teacher_runtime": teacher_config.runtime,
+                "teacher_runtime_model_id": teacher_config.runtime_model_id,
+                "teacher_revision": teacher_config.revision,
+                "teacher_license": teacher_config.license,
+                "teacher_size": teacher_config.size,
+                "teacher_context_length": teacher_config.context_length,
                 "prompt_version": PROMPT_VERSION,
                 "prompt_path": str(prompt_path),
                 "decoding_config": DECODING_CONFIG,
@@ -94,6 +114,20 @@ def create_smoke_teacher_inputs(
         encoding="utf-8",
     )
     return output_path
+
+
+def default_teacher_config() -> TeacherConfig:
+    """Return the first local smoke teacher config."""
+
+    return TeacherConfig(
+        model_id=DEFAULT_TEACHER_MODEL_ID,
+        runtime=DEFAULT_TEACHER_RUNTIME,
+        runtime_model_id=DEFAULT_TEACHER_RUNTIME_MODEL_ID,
+        revision=DEFAULT_TEACHER_REVISION,
+        license=DEFAULT_TEACHER_LICENSE,
+        size=DEFAULT_TEACHER_SIZE,
+        context_length=DEFAULT_TEACHER_CONTEXT_LENGTH,
+    )
 
 
 def validate_smoke_teacher_inputs(data_dir: str | Path) -> dict[str, int]:
@@ -226,13 +260,34 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Create teacher input artifacts.")
     parser.add_argument("--data-dir", type=Path, required=True)
     parser.add_argument("--prompt-path", type=Path, default=PROMPT_PATH)
+    parser.add_argument("--teacher-model-id", default=DEFAULT_TEACHER_MODEL_ID)
+    parser.add_argument("--teacher-runtime", default=DEFAULT_TEACHER_RUNTIME)
+    parser.add_argument("--teacher-runtime-model-id", default=DEFAULT_TEACHER_RUNTIME_MODEL_ID)
+    parser.add_argument("--teacher-revision", default=DEFAULT_TEACHER_REVISION)
+    parser.add_argument("--teacher-license", default=DEFAULT_TEACHER_LICENSE)
+    parser.add_argument("--teacher-size", default=DEFAULT_TEACHER_SIZE)
+    parser.add_argument("--teacher-context-length", default=DEFAULT_TEACHER_CONTEXT_LENGTH)
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("create-smoke")
     subparsers.add_parser("validate-smoke")
     args = parser.parse_args(argv)
 
     if args.command == "create-smoke":
-        print(create_smoke_teacher_inputs(args.data_dir, prompt_path=args.prompt_path))
+        print(
+            create_smoke_teacher_inputs(
+                args.data_dir,
+                prompt_path=args.prompt_path,
+                teacher_config=TeacherConfig(
+                    model_id=args.teacher_model_id,
+                    runtime=args.teacher_runtime,
+                    runtime_model_id=args.teacher_runtime_model_id,
+                    revision=args.teacher_revision,
+                    license=args.teacher_license,
+                    size=args.teacher_size,
+                    context_length=args.teacher_context_length,
+                ),
+            )
+        )
     elif args.command == "validate-smoke":
         validate_smoke_teacher_inputs(args.data_dir)
     return 0

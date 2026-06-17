@@ -18,6 +18,8 @@ Each record includes:
   historical subject;
 - the pinned teacher model id, revision, license, prompt version, and decoding
   config;
+- the teacher runtime, runtime model id, local tag id, size, and context length
+  when the teacher runs through Ollama;
 - system and user messages;
 - full diff text and `diff_sha256`;
 - `input_status`.
@@ -29,6 +31,15 @@ Create the smoke teacher inputs:
 
 ```bash
 make teacher-inputs
+```
+
+By default, smoke teacher inputs target the local Ollama teacher approved in
+`docs/teacher-decisions/ollama-deepseek-r1-latest-smoke.md`:
+
+```text
+teacher_model_id: ollama/deepseek-r1:latest
+teacher_runtime: ollama
+teacher_revision: 6995872bfe4c
 ```
 
 Validate and refresh checksums:
