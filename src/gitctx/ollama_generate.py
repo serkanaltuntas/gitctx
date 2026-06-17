@@ -27,7 +27,10 @@ def generate_smoke_labels(
     *,
     ollama_url: str = "http://127.0.0.1:11434",
     limit: int | None = None,
+    ollama_options: dict[str, Any] | None = None,
+    request_timeout: int = 600,
     resume: bool = True,
+    think: bool = False,
 ) -> dict[str, Any]:
     """Generate labels for smoke teacher inputs and write JSONL plus report."""
 
@@ -53,7 +56,13 @@ def generate_smoke_labels(
                 skipped += 1
                 continue
             try:
-                raw_content = _call_ollama(ollama_url, teacher_input)
+                raw_content = _call_ollama(
+                    ollama_url,
+                    teacher_input,
+                    ollama_options=ollama_options,
+                    request_timeout=request_timeout,
+                    think=think,
+                )
                 candidate = _parse_teacher_json(raw_content)
                 record = _build_generated_label(output_id, teacher_input, candidate)
                 errors = validate_generated_label_matches_input(record, teacher_input)
@@ -140,11 +149,20 @@ def _load_existing(path: Path) -> list[dict[str, Any]]:
     return load_jsonl(path)
 
 
-def _call_ollama(ollama_url: str, teacher_input: dict[str, Any]) -> str:
+def _call_ollama(
+    ollama_url: str,
+    teacher_input: dict[str, Any],
+    *,
+    ollama_options: dict[str, Any] | None = None,
+    request_timeout: int = 600,
+    think: bool = False,
+) -> str:
     payload = {
         "model": teacher_input["teacher_runtime_model_id"],
         "stream": False,
-        "options": teacher_input["decoding_config"],
+        "format": "json",
+        "options": _ollama_options(teacher_input["decoding_config"], ollama_options),
+        "think": think,
         "messages": [
             {"role": "system", "content": teacher_input["system_message"]},
             {"role": "user", "content": teacher_input["user_message"]},
@@ -157,7 +175,7 @@ def _call_ollama(ollama_url: str, teacher_input: dict[str, Any]) -> str:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=600) as response:
+        with urllib.request.urlopen(request, timeout=request_timeout) as response:
             body = json.loads(response.read().decode("utf-8"))
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Ollama request failed: {exc}") from exc
@@ -165,6 +183,23 @@ def _call_ollama(ollama_url: str, teacher_input: dict[str, Any]) -> str:
         return str(body["message"]["content"])
     except KeyError as exc:
         raise ValueError(f"unexpected Ollama response shape: {body}") from exc
+
+
+def _ollama_options(
+    decoding_config: dict[str, Any],
+    overrides: dict[str, Any] | None,
+) -> dict[str, Any]:
+    options: dict[str, Any] = {}
+    for key in ("temperature", "top_p", "seed"):
+        if key in decoding_config:
+            options[key] = decoding_config[key]
+    if "num_predict" in decoding_config:
+        options["num_predict"] = decoding_config["num_predict"]
+    elif "max_new_tokens" in decoding_config:
+        options["num_predict"] = decoding_config["max_new_tokens"]
+    if overrides:
+        options.update({key: value for key, value in overrides.items() if value is not None})
+    return options
 
 
 def _parse_teacher_json(raw_content: str) -> dict[str, Any]:
@@ -288,6 +323,10 @@ def main(argv: list[str] | None = None) -> int:
     generate = subparsers.add_parser("generate-smoke")
     generate.add_argument("--limit", type=int)
     generate.add_argument("--no-resume", action="store_true")
+    generate.add_argument("--num-ctx", type=int)
+    generate.add_argument("--num-predict", type=int)
+    generate.add_argument("--request-timeout", type=int, default=600)
+    generate.add_argument("--think", action="store_true")
     subparsers.add_parser("validate-smoke")
     args = parser.parse_args(argv)
 
@@ -296,7 +335,10 @@ def main(argv: list[str] | None = None) -> int:
             args.data_dir,
             ollama_url=args.ollama_url,
             limit=args.limit,
+            ollama_options={"num_ctx": args.num_ctx, "num_predict": args.num_predict},
+            request_timeout=args.request_timeout,
             resume=not args.no_resume,
+            think=args.think,
         )
     elif args.command == "validate-smoke":
         validate_smoke_generated_labels(args.data_dir)

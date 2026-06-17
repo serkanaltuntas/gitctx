@@ -5,6 +5,9 @@ SMOKE_RECORDS ?= 50
 SMOKE_REPORT = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.report.json
 SMOKE_JSONL = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.jsonl
 REVIEWER ?= reviewer@example.com
+OLLAMA_NUM_CTX ?= 8192
+OLLAMA_NUM_PREDICT ?= 384
+OLLAMA_REQUEST_TIMEOUT ?= 300
 
 .PHONY: data-dir smoke smoke-check smoke-finalize smoke-review-template smoke-review-check teacher-inputs teacher-input-check teacher-generate teacher-generate-check test fixture-eval
 
@@ -47,7 +50,10 @@ teacher-input-check:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 teacher-generate:
-	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" generate-smoke
+	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" generate-smoke \
+		--num-ctx "$(OLLAMA_NUM_CTX)" \
+		--num-predict "$(OLLAMA_NUM_PREDICT)" \
+		--request-timeout "$(OLLAMA_REQUEST_TIMEOUT)"
 
 teacher-generate-check:
 	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" validate-smoke

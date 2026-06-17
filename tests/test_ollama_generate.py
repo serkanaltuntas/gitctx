@@ -18,6 +18,7 @@ class OllamaGenerateTests(unittest.TestCase):
                 report = generate_smoke_labels(
                     root,
                     ollama_url=f"http://127.0.0.1:{server.server_port}",
+                    ollama_options={"num_ctx": 4096},
                     resume=False,
                 )
                 summary = validate_smoke_generated_labels(root)
@@ -36,6 +37,10 @@ class OllamaGenerateTests(unittest.TestCase):
             self.assertEqual(label["header"], "fix(parser): handle empty values")
             self.assertEqual(label["teacher_runtime_model_id"], "deepseek-r1:latest")
             self.assertEqual(label["human_review_status"], "not_reviewed")
+            self.assertEqual(server.seen_payload["format"], "json")  # type: ignore[attr-defined]
+            self.assertFalse(server.seen_payload["think"])  # type: ignore[attr-defined]
+            self.assertEqual(server.seen_payload["options"]["num_ctx"], 4096)  # type: ignore[attr-defined]
+            self.assertEqual(server.seen_payload["options"]["num_predict"], 256)  # type: ignore[attr-defined]
 
     def _write_teacher_inputs(self, root: Path) -> None:
         (root / "artifacts/teacher").mkdir(parents=True)
@@ -76,7 +81,7 @@ class OllamaGenerateTests(unittest.TestCase):
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self) -> None:  # noqa: N802 - stdlib callback.
                 length = int(self.headers["Content-Length"])
-                self.rfile.read(length)
+                self.server.seen_payload = json.loads(self.rfile.read(length))  # type: ignore[attr-defined]
                 payload = {
                     "message": {
                         "content": json.dumps(
