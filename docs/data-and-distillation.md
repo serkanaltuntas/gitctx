@@ -37,6 +37,9 @@ inconsistent, or unrelated to the actual diff.
 - Every teacher model and version requires a recorded license decision before
   use.
 
+The initial teacher shortlist is tracked in
+[`teacher-model-shortlist.md`](teacher-model-shortlist.md).
+
 ## Required Provenance
 
 Every generated label must record:
@@ -57,4 +60,3 @@ Every generated label must record:
 Publish source manifests, scripts, filters, prompts, cards, and aggregate stats
 by default. Publish full derived examples only after confirming that source and
 teacher licenses allow redistribution.
-

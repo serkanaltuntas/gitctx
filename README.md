@@ -68,6 +68,7 @@ See:
 
 - [docs/model-plan.md](docs/model-plan.md)
 - [docs/data-and-distillation.md](docs/data-and-distillation.md)
+- [docs/teacher-model-shortlist.md](docs/teacher-model-shortlist.md)
 - [docs/evaluation.md](docs/evaluation.md)
 - [docs/open-source-standard.md](docs/open-source-standard.md)
 - [docs/release-checklist.md](docs/release-checklist.md)
