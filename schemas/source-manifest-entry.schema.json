@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitctx.com/schemas/source-manifest-entry.schema.json",
+  "title": "gitctx source manifest entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "repo_url",
+    "default_branch",
+    "source_license",
+    "license_url",
+    "license_review_date",
+    "reviewer",
+    "review_status",
+    "source_revision",
+    "allowed_splits",
+    "exclude_globs",
+    "notes"
+  ],
+  "properties": {
+    "repo_url": {
+      "type": "string",
+      "minLength": 1
+    },
+    "default_branch": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_license": {
+      "type": "string",
+      "enum": ["Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MIT", "MPL-2.0"]
+    },
+    "license_url": {
+      "type": "string",
+      "minLength": 1
+    },
+    "license_review_date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["approved_for_audit", "approved_for_training", "rejected", "pending"]
+    },
+    "source_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "allowed_splits": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": ["DEV", "REPORT", "HELD_OUT"]
+      }
+    },
+    "exclude_globs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

@@ -11,6 +11,9 @@ large-scale data generation or proof-model training.
 Use only source repositories that pass the permissive-license manifest review.
 For the first audit, prefer small and medium diffs with clear intent.
 
+The manifest format and source-selection rules are defined in
+[`source-manifest.md`](source-manifest.md).
+
 Exclude:
 
 - generated or vendored files;
@@ -94,6 +97,10 @@ Every generated label must preserve:
 - parser result;
 - verifier score;
 - human-review status when available.
+
+Generated-label records must satisfy
+[`schemas/generated-label.schema.json`](../schemas/generated-label.schema.json)
+and the dependency-free validator in `src/gitctx/provenance.py`.
 
 ## Verifier Checks
 

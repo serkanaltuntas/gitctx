@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitctx.com/schemas/generated-label.schema.json",
+  "title": "gitctx generated label provenance record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "source_repo_url",
+    "source_license",
+    "source_commit",
+    "parent_commit",
+    "data_split",
+    "changed_paths",
+    "teacher_model_id",
+    "teacher_revision",
+    "teacher_license",
+    "prompt_version",
+    "decoding_config",
+    "generation_timestamp",
+    "header",
+    "body",
+    "footers",
+    "type",
+    "scope",
+    "confidence",
+    "warnings",
+    "evidence_paths",
+    "parser_result",
+    "verifier_score",
+    "human_review_status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_repo_url": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_license": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "parent_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "data_split": {
+      "type": "string",
+      "enum": ["DEV", "REPORT", "HELD_OUT"]
+    },
+    "changed_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "teacher_model_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "teacher_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "teacher_license": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt_version": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]*$"
+    },
+    "decoding_config": {
+      "type": "object"
+    },
+    "generation_timestamp": {
+      "type": "string",
+      "minLength": 1
+    },
+    "header": {
+      "type": "string",
+      "minLength": 1
+    },
+    "body": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "footers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "type": ["string", "null"]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "parser_result": {
+      "type": "object"
+    },
+    "verifier_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "human_review_status": {
+      "type": "string",
+      "enum": ["not_reviewed", "accept_as_is", "accept_with_light_edit", "reject"]
+    }
+  }
+}

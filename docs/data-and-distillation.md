@@ -17,6 +17,10 @@ Use permissively licensed public repositories as sources of:
 Historical commit messages are not automatically truth. Many are vague,
 inconsistent, or unrelated to the actual diff.
 
+Source eligibility is tracked in [`source-manifest.md`](source-manifest.md).
+Do not generate kept labels from a repository revision that is missing from the
+source manifest.
+
 ## Default Label Strategy
 
 1. Extract eligible diffs and repository context.
@@ -59,6 +63,10 @@ Every generated label must record:
 - decoding configuration;
 - verifier score;
 - human-review status when available.
+
+The generated-label record format is defined in
+[`source-manifest.md`](source-manifest.md) and
+[`schemas/generated-label.schema.json`](../schemas/generated-label.schema.json).
 
 ## Publication Rule
 
