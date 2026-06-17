@@ -1,0 +1,82 @@
+import json
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+from gitctx.teacher_inputs import create_smoke_teacher_inputs, validate_smoke_teacher_inputs
+
+
+class TeacherInputTests(unittest.TestCase):
+    def test_creates_and_validates_smoke_teacher_input(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "sources/github.com/example/repo"
+            repo.mkdir(parents=True)
+            self._run(["git", "init"], cwd=repo)
+            self._run(["git", "config", "user.email", "test@example.com"], cwd=repo)
+            self._run(["git", "config", "user.name", "Test User"], cwd=repo)
+            (repo / "parser.py").write_text("old = True\n", encoding="utf-8")
+            self._run(["git", "add", "parser.py"], cwd=repo)
+            self._run(["git", "commit", "-m", "initial"], cwd=repo)
+            parent = self._run(["git", "rev-parse", "HEAD"], cwd=repo).strip()
+            (repo / "parser.py").write_text("old = False\n", encoding="utf-8")
+            self._run(["git", "commit", "-am", "fix parser"], cwd=repo)
+            commit = self._run(["git", "rev-parse", "HEAD"], cwd=repo).strip()
+
+            (root / "artifacts/smoke").mkdir(parents=True)
+            (root / "reviews").mkdir()
+            source = {
+                "id": "example-repo-111111111111",
+                "source_repo_url": "https://github.com/example/repo",
+                "source_license": "MIT",
+                "manifest_revision": commit,
+                "source_commit": commit,
+                "parent_commit": parent,
+                "data_split": "DEV",
+                "changed_paths": ["parser.py"],
+                "excluded_paths": [],
+                "diff_stat": " parser.py | 2 +-",
+                "historical_subject": "fix parser",
+                "extraction_command": "git diff --stat ...",
+                "review_status": "not_reviewed",
+            }
+            review = {
+                "id": "review-example-repo-111111111111",
+                "source_diff_id": source["id"],
+                "source_repo_url": source["source_repo_url"],
+                "source_commit": commit,
+                "parent_commit": parent,
+                "data_split": "DEV",
+                "changed_paths": ["parser.py"],
+                "decision": "accepted_for_teacher_labeling",
+                "reasons": ["small_source_fix"],
+                "notes": "test",
+                "reviewer": "reviewer@example.com",
+                "review_timestamp": "2026-06-18T20:00:00Z",
+                "review_protocol": "source-diff-smoke-review-v0.1",
+            }
+            (root / "artifacts/smoke/source-diffs.smoke.jsonl").write_text(
+                json.dumps(source) + "\n",
+                encoding="utf-8",
+            )
+            (root / "reviews/source-diffs.smoke.review.jsonl").write_text(
+                json.dumps(review) + "\n",
+                encoding="utf-8",
+            )
+
+            output_path = create_smoke_teacher_inputs(root)
+            summary = validate_smoke_teacher_inputs(root)
+            record = json.loads(output_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(summary["teacher_input_records"], 1)
+            self.assertIn("Generate one Conventional Commit message", record["user_message"])
+            self.assertIn("diff --git", record["diff"])
+            self.assertEqual(record["input_status"], "ready_for_generation")
+
+    def _run(self, args: list[str], *, cwd: Path) -> str:
+        return subprocess.check_output(args, cwd=cwd, text=True)
+
+
+if __name__ == "__main__":
+    unittest.main()

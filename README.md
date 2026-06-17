@@ -72,6 +72,8 @@ make smoke-check
 make smoke-finalize
 make smoke-review-template REVIEWER="reviewer@example.com"
 make smoke-review-check
+make teacher-inputs
+make teacher-input-check
 ```
 
 See:
@@ -80,6 +82,7 @@ See:
 - [docs/data-and-distillation.md](docs/data-and-distillation.md)
 - [docs/source-manifest.md](docs/source-manifest.md)
 - [docs/source-diff-review.md](docs/source-diff-review.md)
+- [docs/teacher-inputs.md](docs/teacher-inputs.md)
 - [docs/local-worker-runbook.md](docs/local-worker-runbook.md)
 - [docs/teacher-model-shortlist.md](docs/teacher-model-shortlist.md)
 - [docs/teacher-audit-plan.md](docs/teacher-audit-plan.md)

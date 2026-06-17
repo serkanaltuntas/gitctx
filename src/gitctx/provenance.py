@@ -50,6 +50,12 @@ HUMAN_REVIEW_STATUSES = frozenset(
         "reject",
     }
 )
+TEACHER_INPUT_STATUSES = frozenset(
+    {
+        "ready_for_generation",
+        "skipped",
+    }
+)
 
 _HEX_REVISION_RE = re.compile(r"^[0-9a-f]{7,40}$")
 _PROMPT_VERSION_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]*$")
@@ -243,6 +249,65 @@ def validate_source_diff_review_decision(record: Mapping[str, Any]) -> tuple[str
     notes = record.get("notes")
     if not isinstance(notes, str):
         errors.append("notes must be a string")
+
+    return tuple(errors)
+
+
+def validate_teacher_input_record(record: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return validation errors for one teacher prompt input record."""
+
+    errors: list[str] = []
+
+    for key in (
+        "id",
+        "source_diff_id",
+        "review_decision_id",
+        "source_repo_url",
+        "source_license",
+        "source_commit",
+        "parent_commit",
+        "data_split",
+        "teacher_model_id",
+        "teacher_revision",
+        "teacher_license",
+        "prompt_version",
+        "prompt_path",
+        "system_message",
+        "user_message",
+        "diff",
+        "diff_sha256",
+        "input_status",
+    ):
+        _require_str(record, key, errors)
+
+    data_split = record.get("data_split")
+    if isinstance(data_split, str) and data_split not in DATA_SPLITS:
+        errors.append(f"invalid data_split: {data_split}")
+    if data_split == "HELD_OUT":
+        errors.append("teacher inputs must not be generated for HELD_OUT records")
+
+    for key in ("source_commit", "parent_commit", "teacher_revision"):
+        value = record.get(key)
+        if isinstance(value, str) and not _HEX_REVISION_RE.match(value):
+            errors.append(f"{key} must be a 7-40 character lowercase hex revision")
+
+    prompt_version = record.get("prompt_version")
+    if isinstance(prompt_version, str) and not _PROMPT_VERSION_RE.match(prompt_version):
+        errors.append("prompt_version must be a stable lowercase identifier")
+
+    diff_sha256 = record.get("diff_sha256")
+    if isinstance(diff_sha256, str) and not re.match(r"^[0-9a-f]{64}$", diff_sha256):
+        errors.append("diff_sha256 must be a lowercase sha256 hex digest")
+
+    input_status = record.get("input_status")
+    if isinstance(input_status, str) and input_status not in TEACHER_INPUT_STATUSES:
+        errors.append(f"invalid input_status: {input_status}")
+
+    _require_list(record, "changed_paths", errors, min_items=1)
+
+    decoding_config = record.get("decoding_config")
+    if not isinstance(decoding_config, dict):
+        errors.append("decoding_config must be an object")
 
     return tuple(errors)
 

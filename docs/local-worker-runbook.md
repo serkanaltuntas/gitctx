@@ -128,3 +128,17 @@ Then validate and refresh checksums:
 ```bash
 make smoke-review-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
 ```
+
+## Prepare Teacher Inputs
+
+After source-diff review decisions are complete, create teacher input prompts
+for only the records marked `accepted_for_teacher_labeling`:
+
+```bash
+make teacher-inputs GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+make teacher-input-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+```
+
+This writes `artifacts/teacher/teacher-inputs.smoke.jsonl` in the private data
+repository. It includes full diff text and must remain private until a later
+data-card and redistribution review approves any public release shape.

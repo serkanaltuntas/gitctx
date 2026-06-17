@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitctx.com/schemas/teacher-input.schema.json",
+  "title": "gitctx teacher input record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "source_diff_id",
+    "review_decision_id",
+    "source_repo_url",
+    "source_license",
+    "source_commit",
+    "parent_commit",
+    "data_split",
+    "changed_paths",
+    "diff_stat",
+    "historical_subject",
+    "teacher_model_id",
+    "teacher_revision",
+    "teacher_license",
+    "prompt_version",
+    "prompt_path",
+    "decoding_config",
+    "system_message",
+    "user_message",
+    "diff",
+    "diff_sha256",
+    "input_status"
+  ],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "source_diff_id": {"type": "string", "minLength": 1},
+    "review_decision_id": {"type": "string", "minLength": 1},
+    "source_repo_url": {"type": "string", "minLength": 1},
+    "source_license": {"type": "string", "minLength": 1},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "parent_commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "data_split": {"type": "string", "enum": ["DEV", "REPORT", "HELD_OUT"]},
+    "changed_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string"}
+    },
+    "diff_stat": {"type": "string"},
+    "historical_subject": {"type": "string"},
+    "teacher_model_id": {"type": "string", "minLength": 1},
+    "teacher_revision": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "teacher_license": {"type": "string", "minLength": 1},
+    "prompt_version": {"type": "string", "minLength": 1},
+    "prompt_path": {"type": "string", "minLength": 1},
+    "decoding_config": {"type": "object"},
+    "system_message": {"type": "string", "minLength": 1},
+    "user_message": {"type": "string", "minLength": 1},
+    "diff": {"type": "string", "minLength": 1},
+    "diff_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "input_status": {
+      "type": "string",
+      "enum": ["ready_for_generation", "skipped"]
+    }
+  }
+}

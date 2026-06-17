@@ -18,6 +18,7 @@ from gitctx.provenance import (
 SMOKE_JSONL = Path("artifacts/smoke/source-diffs.smoke.jsonl")
 SMOKE_REPORT = Path("artifacts/smoke/source-diffs.smoke.report.json")
 SMOKE_REVIEW = Path("reviews/source-diffs.smoke.review.jsonl")
+SMOKE_TEACHER_INPUTS = Path("artifacts/teacher/teacher-inputs.smoke.jsonl")
 SMOKE_MANIFEST = Path("manifests/source-manifest.audit.jsonl")
 GITCTX_COMMIT = Path("lineage/gitctx-public-commit.txt")
 CHECKSUMS = Path("checksums/sha256.txt")
@@ -180,6 +181,8 @@ def write_checksums(data_dir: str | Path) -> Path:
     paths = [SMOKE_JSONL, SMOKE_REPORT, SMOKE_MANIFEST, GITCTX_COMMIT]
     if (data_dir / SMOKE_REVIEW).exists():
         paths.append(SMOKE_REVIEW)
+    if (data_dir / SMOKE_TEACHER_INPUTS).exists():
+        paths.append(SMOKE_TEACHER_INPUTS)
     lines = []
     for relative_path in paths:
         digest = _sha256(data_dir / relative_path)
