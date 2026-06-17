@@ -92,9 +92,47 @@ The record must include:
 
 Teacher-generated labels must not be stored as HELD_OUT labels.
 
+## Source-Diff Extraction
+
+The first extraction scaffold lives in `src/gitctx/source_extract.py`.
+
+It reads a local Git clone plus one source-manifest entry and emits JSONL
+source-diff records. These records contain commit ids, parent ids, changed
+paths, diffstat, and the historical subject. They intentionally do not include
+full diff text; full diffs should be generated as local artifacts only after
+redistribution review.
+
+Required fields are defined in
+[`schemas/source-diff.schema.json`](../schemas/source-diff.schema.json).
+
+Example command shape:
+
+```bash
+python -m gitctx.source_extract /path/to/local/repo /path/to/source-entry.json --limit 25
+```
+
 ## Example Files
 
 - `examples/source-manifest.example.jsonl`
 - `examples/generated-label.example.jsonl`
 
 These are format examples only. They are not approved source data.
+
+## First Audit Manifest
+
+The first real audit source candidates are recorded in
+`manifests/source-manifest.audit.jsonl`.
+
+Current approved-for-audit repositories:
+
+| Repository | License | Revision |
+|---|---|---|
+| `https://github.com/pallets/click` | `BSD-3-Clause` | `8a1b1a33d739be05b7e91251e3c0dde77c5e152f` |
+| `https://github.com/psf/requests` | `Apache-2.0` | `d64b9ad4bf1c14e21e0df3f0f4320fec81180e91` |
+| `https://github.com/pytest-dev/pluggy` | `MIT` | `7fce99cb955846901b22b051909aa4f30dc16128` |
+| `https://github.com/encode/httpx` | `BSD-3-Clause` | `b5addb64f0161ff6bfe94c124ef76f6a1fba5254` |
+| `https://github.com/python-attrs/attrs` | `MIT` | `89fae8300f484544c1b7678cea5efe58c551fbb9` |
+
+These entries allow audit extraction only. They do not approve publishing full
+diff-derived examples, generating more than the bounded audit sample, or using
+labels for model training.

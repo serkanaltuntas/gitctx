@@ -13,6 +13,8 @@ For the first audit, prefer small and medium diffs with clear intent.
 
 The manifest format and source-selection rules are defined in
 [`source-manifest.md`](source-manifest.md).
+The first source-diff extraction scaffold emits records matching
+[`schemas/source-diff.schema.json`](../schemas/source-diff.schema.json).
 
 Exclude:
 

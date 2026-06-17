@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitctx.com/schemas/source-diff.schema.json",
+  "title": "gitctx source diff record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "source_repo_url",
+    "source_license",
+    "manifest_revision",
+    "source_commit",
+    "parent_commit",
+    "data_split",
+    "changed_paths",
+    "excluded_paths",
+    "diff_stat",
+    "historical_subject",
+    "extraction_command",
+    "review_status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_repo_url": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_license": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifest_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "parent_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "data_split": {
+      "type": "string",
+      "enum": ["DEV", "REPORT", "HELD_OUT"]
+    },
+    "changed_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "excluded_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "diff_stat": {
+      "type": "string"
+    },
+    "historical_subject": {
+      "type": "string",
+      "minLength": 1
+    },
+    "extraction_command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["not_reviewed", "accepted_for_smoke", "rejected"]
+    }
+  }
+}

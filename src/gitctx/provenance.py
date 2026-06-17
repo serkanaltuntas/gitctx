@@ -28,6 +28,13 @@ SOURCE_REVIEW_STATUSES = frozenset(
     }
 )
 DATA_SPLITS = frozenset({"DEV", "REPORT", "HELD_OUT"})
+SOURCE_DIFF_REVIEW_STATUSES = frozenset(
+    {
+        "not_reviewed",
+        "accepted_for_smoke",
+        "rejected",
+    }
+)
 HUMAN_REVIEW_STATUSES = frozenset(
     {
         "not_reviewed",
@@ -149,11 +156,54 @@ def validate_generated_label_record(record: Mapping[str, Any]) -> tuple[str, ...
     return tuple(errors)
 
 
+def validate_source_diff_record(record: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return validation errors for one extracted source-diff record."""
+
+    errors: list[str] = []
+
+    for key in (
+        "id",
+        "source_repo_url",
+        "source_license",
+        "manifest_revision",
+        "source_commit",
+        "parent_commit",
+        "data_split",
+        "historical_subject",
+        "extraction_command",
+        "review_status",
+    ):
+        _require_str(record, key, errors)
+
+    data_split = record.get("data_split")
+    if isinstance(data_split, str) and data_split not in DATA_SPLITS:
+        errors.append(f"invalid data_split: {data_split}")
+
+    for key in ("manifest_revision", "source_commit", "parent_commit"):
+        value = record.get(key)
+        if isinstance(value, str) and not _HEX_REVISION_RE.match(value):
+            errors.append(f"{key} must be a 7-40 character lowercase hex revision")
+
+    review_status = record.get("review_status")
+    if isinstance(review_status, str) and review_status not in SOURCE_DIFF_REVIEW_STATUSES:
+        errors.append(f"invalid review_status: {review_status}")
+
+    _require_list(record, "changed_paths", errors, min_items=1)
+    _require_list(record, "excluded_paths", errors)
+
+    diff_stat = record.get("diff_stat")
+    if not isinstance(diff_stat, str):
+        errors.append("diff_stat must be a string")
+
+    return tuple(errors)
+
+
 def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
     """Load a JSONL file into dictionaries."""
 
     records: list[dict[str, Any]] = []
-    for line_number, line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), start=1):
+    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    for line_number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
         value = json.loads(line)

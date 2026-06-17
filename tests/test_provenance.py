@@ -22,6 +22,14 @@ class SourceManifestValidationTests(unittest.TestCase):
 
         self.assertIn("approved_for_audit sources must not include HELD_OUT by default", errors)
 
+    def test_audit_source_manifest_entries_are_valid(self) -> None:
+        records = load_jsonl("manifests/source-manifest.audit.jsonl")
+
+        self.assertEqual(len(records), 5)
+        for record in records:
+            self.assertEqual(validate_source_manifest_entry(record), ())
+            self.assertEqual(record["review_status"], "approved_for_audit")
+
 
 class GeneratedLabelValidationTests(unittest.TestCase):
     def test_example_generated_label_is_valid(self) -> None:
