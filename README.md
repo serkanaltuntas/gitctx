@@ -69,6 +69,7 @@ See:
 - [docs/model-plan.md](docs/model-plan.md)
 - [docs/data-and-distillation.md](docs/data-and-distillation.md)
 - [docs/source-manifest.md](docs/source-manifest.md)
+- [docs/local-worker-runbook.md](docs/local-worker-runbook.md)
 - [docs/teacher-model-shortlist.md](docs/teacher-model-shortlist.md)
 - [docs/teacher-audit-plan.md](docs/teacher-audit-plan.md)
 - [docs/evaluation.md](docs/evaluation.md)
