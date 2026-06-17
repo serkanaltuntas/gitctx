@@ -87,3 +87,20 @@ make smoke-check
 
 Then send the report and smoke JSONL back to the control workstation for review.
 Do not publish the local artifact until redistribution review is complete.
+
+## Finalize Private Artifact
+
+If the smoke run writes into a private data repository, normalize machine-local
+paths, validate records, and refresh checksums:
+
+```bash
+make smoke-finalize GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+```
+
+Then inspect and commit the private data repository:
+
+```bash
+cd "$HOME/LAB/gitctx-data"
+git status --short --ignored
+git diff -- artifacts/smoke/source-diffs.smoke.report.json checksums/sha256.txt
+```

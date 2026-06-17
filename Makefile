@@ -11,7 +11,7 @@ data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
 
 smoke: data-dir
-	$(PYTHON) -m gitctx.worker_smoke \
+	PYTHONPATH=src $(PYTHON) -m gitctx.worker_smoke \
 		--manifest "$(SMOKE_MANIFEST)" \
 		--data-dir "$(GITCTX_DATA_DIR)" \
 		--records "$(SMOKE_RECORDS)"
@@ -19,6 +19,17 @@ smoke: data-dir
 smoke-check:
 	$(PYTHON) -m json.tool "$(SMOKE_REPORT)"
 	wc -l "$(SMOKE_JSONL)"
+
+smoke-normalize:
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" normalize-smoke
+
+smoke-validate:
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-smoke
+
+smoke-checksum:
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
+
+smoke-finalize: smoke-normalize smoke-validate smoke-checksum
 
 test:
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests

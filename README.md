@@ -69,6 +69,7 @@ Run local source-diff smoke extraction:
 ```bash
 make smoke
 make smoke-check
+make smoke-finalize
 ```
 
 See:
