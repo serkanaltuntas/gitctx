@@ -6,7 +6,7 @@ SMOKE_REPORT = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.report.json
 SMOKE_JSONL = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.jsonl
 REVIEWER ?= reviewer@example.com
 OLLAMA_NUM_CTX ?= 8192
-OLLAMA_NUM_PREDICT ?= 384
+OLLAMA_NUM_PREDICT ?= 1024
 OLLAMA_REQUEST_TIMEOUT ?= 300
 
 .PHONY: data-dir smoke smoke-check smoke-finalize smoke-review-template smoke-review-check teacher-inputs teacher-input-check teacher-generate teacher-generate-check test fixture-eval
