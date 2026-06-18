@@ -15,6 +15,7 @@ from gitctx.provenance import (
     validate_source_manifest_entry,
 )
 from gitctx.source_extract import extract_source_diff_record, iter_candidate_commits
+from gitctx.split_plan import load_split_plan
 
 
 def run_smoke(
@@ -24,6 +25,7 @@ def run_smoke(
     records: int = 50,
     per_repo_limit: int = 20,
     split: str = "DEV",
+    split_plan_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Clone approved sources and emit a source-diff smoke artifact."""
 
@@ -34,6 +36,7 @@ def run_smoke(
         records=records,
         per_repo_limit=per_repo_limit,
         split=split,
+        split_plan_path=split_plan_path,
     )
 
 
@@ -45,6 +48,7 @@ def run_source_extract(
     records: int,
     per_repo_limit: int,
     split: str = "DEV",
+    split_plan_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Clone approved sources and emit a named source-diff artifact."""
 
@@ -60,6 +64,7 @@ def run_source_extract(
     report_path = artifact_dir / f"source-diffs.{artifact_name}.report.json"
 
     manifest_entries = load_jsonl(manifest_path)
+    split_plan = load_split_plan(split_plan_path) if split_plan_path else None
     output_records: list[dict[str, Any]] = []
     repo_reports: list[dict[str, Any]] = []
     started = time.time()
@@ -89,7 +94,13 @@ def run_source_extract(
             for commit in commits:
                 if len(output_records) >= records:
                     break
-                record = extract_source_diff_record(repo_path, entry, commit, data_split=split)
+                record = extract_source_diff_record(
+                    repo_path,
+                    entry,
+                    commit,
+                    data_split=split,
+                    split_plan=split_plan,
+                )
                 if record is None:
                     continue
                 validation_errors = validate_source_diff_record(record)
@@ -114,6 +125,7 @@ def run_source_extract(
         "requested_records": records,
         "written_records": len(output_records),
         "split": split,
+        "split_plan_path": str(split_plan_path) if split_plan_path else None,
         "artifact_name": artifact_name,
         "repo_reports": repo_reports,
         "duration_seconds": round(time.time() - started, 3),
@@ -175,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--records", type=int, default=50)
     parser.add_argument("--per-repo-limit", type=int, default=20)
     parser.add_argument("--split", default="DEV")
+    parser.add_argument("--split-plan", type=Path)
     parser.add_argument("--artifact-name", default="smoke")
     args = parser.parse_args(argv)
 
@@ -185,6 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         records=args.records,
         per_repo_limit=args.per_repo_limit,
         split=args.split,
+        split_plan_path=args.split_plan,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["written_records"] else 1

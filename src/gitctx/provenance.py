@@ -263,6 +263,13 @@ def validate_source_diff_record(record: Mapping[str, Any]) -> tuple[str, ...]:
         if isinstance(value, str) and not _HEX_REVISION_RE.match(value):
             errors.append(f"{key} must be a 7-40 character lowercase hex revision")
 
+    source_commit_timestamp = record.get("source_commit_timestamp")
+    if source_commit_timestamp is not None and (
+        not isinstance(source_commit_timestamp, str)
+        or not re.match(r"^\d{4}-\d{2}-\d{2}T", source_commit_timestamp)
+    ):
+        errors.append("source_commit_timestamp must be an RFC3339 string when present")
+
     review_status = record.get("review_status")
     if isinstance(review_status, str) and review_status not in SOURCE_DIFF_REVIEW_STATUSES:
         errors.append(f"invalid review_status: {review_status}")

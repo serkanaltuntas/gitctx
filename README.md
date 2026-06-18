@@ -94,6 +94,13 @@ make pilot-train-artifact-check
 make pilot-eval-baseline
 ```
 
+For non-smoke artifacts that contain `REPORT` or `HELD_OUT` candidates, pass a
+prelocked split plan:
+
+```bash
+make pilot-source SPLIT_PLAN="/path/to/split-plan.json"
+```
+
 See:
 
 - [docs/model-plan.md](docs/model-plan.md)

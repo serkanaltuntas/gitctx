@@ -1,0 +1,24 @@
+{
+  "id": "split-plan.example.v0",
+  "version": "v0",
+  "created_at": "2026-06-19",
+  "description": "Format example only; not an approved dataset split plan.",
+  "windows": [
+    {
+      "id": "example-dev-2025-h1",
+      "repo_url": "https://github.com/example/repo",
+      "split": "DEV",
+      "start": "2025-01-01T00:00:00Z",
+      "end": "2025-07-01T00:00:00Z",
+      "reason": "Example training window."
+    },
+    {
+      "id": "example-report-2025-h2",
+      "repo_url": "https://github.com/example/repo",
+      "split": "REPORT",
+      "start": "2025-07-01T00:00:00Z",
+      "end": "2026-01-01T00:00:00Z",
+      "reason": "Example non-overlapping report window."
+    }
+  ]
+}

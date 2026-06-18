@@ -9,6 +9,8 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
+from gitctx.split_plan import load_split_plan, select_split_for_commit
+
 
 def iter_candidate_commits(repo_path: str | Path, revision: str, *, limit: int) -> list[str]:
     """Return recent non-merge commit ids at or below ``revision``."""
@@ -23,6 +25,7 @@ def extract_source_diff_record(
     commit: str,
     *,
     data_split: str = "DEV",
+    split_plan: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Extract one source-diff record from a local repo.
 
@@ -35,6 +38,17 @@ def extract_source_diff_record(
         return None
 
     parent_commit = parents[1]
+    source_commit_timestamp = _git(repo_path, "show", "-s", "--format=%cI", commit)
+    if split_plan is not None:
+        assigned_split = select_split_for_commit(
+            split_plan,
+            source_entry["repo_url"],
+            source_commit_timestamp,
+        )
+        if assigned_split is None:
+            return None
+        data_split = assigned_split
+
     changed_paths = _git(
         repo_path,
         "diff-tree",
@@ -69,6 +83,7 @@ def extract_source_diff_record(
         "source_license": source_entry["source_license"],
         "manifest_revision": source_entry["source_revision"],
         "source_commit": commit,
+        "source_commit_timestamp": source_commit_timestamp,
         "parent_commit": parent_commit,
         "data_split": data_split,
         "changed_paths": include_paths,
@@ -114,12 +129,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("source_entry", type=Path, help="Path to a JSON source-manifest entry.")
     parser.add_argument("--limit", type=int, default=25)
     parser.add_argument("--split", default="DEV")
+    parser.add_argument("--split-plan", type=Path)
     args = parser.parse_args(argv)
 
     source_entry = json.loads(args.source_entry.read_text(encoding="utf-8"))
+    split_plan = load_split_plan(args.split_plan) if args.split_plan else None
     commits = iter_candidate_commits(args.repo, source_entry["source_revision"], limit=args.limit)
     for commit in commits:
-        record = extract_source_diff_record(args.repo, source_entry, commit, data_split=args.split)
+        record = extract_source_diff_record(
+            args.repo,
+            source_entry,
+            commit,
+            data_split=args.split,
+            split_plan=split_plan,
+        )
         if record is not None:
             print(json.dumps(record, sort_keys=True))
     return 0

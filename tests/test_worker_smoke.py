@@ -1,10 +1,11 @@
+import json
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 from gitctx.provenance import load_jsonl
-from gitctx.worker_smoke import run_smoke
+from gitctx.worker_smoke import run_smoke, run_source_extract
 
 
 class WorkerSmokeTests(unittest.TestCase):
@@ -109,8 +110,6 @@ class WorkerSmokeTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            from gitctx.worker_smoke import run_source_extract
-
             report = run_source_extract(
                 manifest,
                 data_dir,
@@ -122,6 +121,81 @@ class WorkerSmokeTests(unittest.TestCase):
             self.assertEqual(report["artifact_name"], "pilot")
             self.assertEqual(Path(report["output_path"]).name, "source-diffs.pilot.jsonl")
             self.assertTrue((data_dir / "artifacts/pilot/source-diffs.pilot.jsonl").exists())
+
+    def test_run_source_extract_applies_split_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = root / "remote"
+            work = root / "work"
+            data_dir = root / "data"
+            remote.mkdir()
+            work.mkdir()
+            _git(remote, "init", "--bare")
+            _git(work, "init")
+            _git(work, "config", "user.email", "test@example.com")
+            _git(work, "config", "user.name", "Test User")
+            _git(work, "remote", "add", "origin", str(remote))
+
+            (work / "parser.py").write_text("old = True\n", encoding="utf-8")
+            _git(work, "add", "parser.py")
+            _git(work, "commit", "-m", "chore: initial parser")
+            (work / "parser.py").write_text("old = False\n", encoding="utf-8")
+            _git(work, "commit", "-am", "fix(parser): reject empty values")
+            revision = _git(work, "rev-parse", "HEAD")
+            _git(work, "push", "origin", "HEAD:main")
+
+            manifest = root / "manifest.jsonl"
+            manifest.write_text(
+                "{"
+                "\"repo_url\":\"https://github.com/example/repo\","
+                f"\"clone_url\":\"{remote}\","
+                "\"default_branch\":\"main\","
+                "\"source_license\":\"MIT\","
+                f"\"license_url\":\"https://example.com/license\","
+                "\"license_review_date\":\"2026-06-17\","
+                "\"reviewer\":\"Test User\","
+                "\"review_status\":\"approved_for_audit\","
+                f"\"source_revision\":\"{revision}\","
+                "\"allowed_splits\":[\"DEV\",\"REPORT\"],"
+                "\"exclude_globs\":[\"vendor/**\"],"
+                "\"notes\":\"test fixture\""
+                "}\n",
+                encoding="utf-8",
+            )
+            split_plan = root / "split-plan.json"
+            split_plan.write_text(
+                json.dumps(
+                    {
+                        "id": "test-plan",
+                        "version": "v0",
+                        "created_at": "2026-06-19",
+                        "windows": [
+                            {
+                                "id": "report-window",
+                                "repo_url": "https://github.com/example/repo",
+                                "split": "REPORT",
+                                "start": "2000-01-01T00:00:00Z",
+                                "end": "2100-01-01T00:00:00Z",
+                                "reason": "test window",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = run_source_extract(
+                manifest,
+                data_dir,
+                artifact_name="reportfixture",
+                records=5,
+                per_repo_limit=5,
+                split_plan_path=split_plan,
+            )
+
+            self.assertEqual(report["split_plan_path"], str(split_plan))
+            records = load_jsonl(report["output_path"])
+            self.assertEqual(records[0]["data_split"], "REPORT")
 
 
 def _git(repo: Path, *args: str) -> str:

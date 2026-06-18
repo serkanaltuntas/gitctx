@@ -51,6 +51,37 @@ Splits are locked in this order:
 
 Do not assign `REPORT` or `HELD_OUT` after seeing generated model outputs.
 
+## Split Plan File
+
+For any artifact that contains more than DEV-only smoke data, split assignment
+must be recorded in a split-plan JSON document before source-diff extraction.
+
+The format is defined in
+[`schemas/split-plan.schema.json`](../schemas/split-plan.schema.json). A format
+example is available at
+[`examples/split-plan.example.json`](../examples/split-plan.example.json).
+
+Each window records:
+
+- repository URL;
+- assigned split;
+- inclusive `start` timestamp;
+- exclusive `end` timestamp;
+- reason for the split decision.
+
+Windows for the same repository must not overlap. During extraction, a commit is
+included only when its source commit timestamp falls into one recorded window.
+The worker writes the `split_plan_path` into the source artifact report so the
+private data repository can prove which split plan produced an artifact.
+
+Example worker shape:
+
+```bash
+make pilot-source \
+  GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" \
+  SPLIT_PLAN="$HOME/LAB/gitctx-data/manifests/split-plan.next.json"
+```
+
 ## Training Rules
 
 - `DEV` may be used for training.

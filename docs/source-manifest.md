@@ -105,10 +105,24 @@ redistribution review.
 Required fields are defined in
 [`schemas/source-diff.schema.json`](../schemas/source-diff.schema.json).
 
+When a split-plan file is provided, extraction assigns `data_split` from the
+matching repository/time window and skips commits outside the plan. This is the
+required mode for any artifact used for `REPORT` or `HELD_OUT` claims. The
+split-plan contract is documented in
+[`docs/split-contract.md`](split-contract.md).
+
 Example command shape:
 
 ```bash
 python -m gitctx.source_extract /path/to/local/repo /path/to/source-entry.json --limit 25
+```
+
+Worker command shape with a split plan:
+
+```bash
+make pilot-source \
+  GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" \
+  SPLIT_PLAN="$HOME/LAB/gitctx-data/manifests/split-plan.next.json"
 ```
 
 ## Example Files

@@ -40,6 +40,10 @@
       "type": "string",
       "pattern": "^[0-9a-f]{7,40}$"
     },
+    "source_commit_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
     "parent_commit": {
       "type": "string",
       "pattern": "^[0-9a-f]{7,40}$"

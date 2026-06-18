@@ -4,6 +4,8 @@ SMOKE_MANIFEST ?= manifests/source-manifest.audit.jsonl
 SMOKE_RECORDS ?= 50
 PILOT_RECORDS ?= 250
 PILOT_PER_REPO_LIMIT ?= 100
+SPLIT_PLAN ?=
+SPLIT_PLAN_FLAG = $(if $(SPLIT_PLAN),--split-plan "$(SPLIT_PLAN)")
 SMOKE_REPORT = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.report.json
 SMOKE_JSONL = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.jsonl
 PILOT_REPORT = $(GITCTX_DATA_DIR)/artifacts/pilot/source-diffs.pilot.report.json
@@ -24,7 +26,8 @@ smoke: data-dir
 		--manifest "$(SMOKE_MANIFEST)" \
 		--data-dir "$(GITCTX_DATA_DIR)" \
 		--records "$(SMOKE_RECORDS)" \
-		--artifact-name smoke
+		--artifact-name smoke \
+		$(SPLIT_PLAN_FLAG)
 
 smoke-check:
 	$(PYTHON) -m json.tool "$(SMOKE_REPORT)"
@@ -47,7 +50,8 @@ pilot-source: data-dir
 		--data-dir "$(GITCTX_DATA_DIR)" \
 		--records "$(PILOT_RECORDS)" \
 		--per-repo-limit "$(PILOT_PER_REPO_LIMIT)" \
-		--artifact-name pilot
+		--artifact-name pilot \
+		$(SPLIT_PLAN_FLAG)
 
 pilot-source-check:
 	$(PYTHON) -m json.tool "$(PILOT_REPORT)"
