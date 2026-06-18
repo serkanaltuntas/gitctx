@@ -43,6 +43,10 @@ and final target message in one auditable JSONL example. The contract is
 documented in [`training-artifacts.md`](training-artifacts.md) and
 [`schemas/training-example.schema.json`](../schemas/training-example.schema.json).
 
+The first pilot data-card and output-use decision are documented in
+[`data-cards/pilot-v0.md`](data-cards/pilot-v0.md) and
+[`output-use-decisions/pilot-v0.md`](output-use-decisions/pilot-v0.md).
+
 ## Teacher Policy
 
 - Self-hosted teacher inference is preferred.

@@ -60,6 +60,12 @@ Validate it and refresh checksums:
 make pilot-train-artifact-check
 ```
 
+Evaluate reviewed targets against raw teacher labels and historical subjects:
+
+```bash
+make pilot-eval-baseline
+```
+
 Equivalent direct commands:
 
 ```bash
@@ -83,3 +89,8 @@ them private until source-license, teacher-license, and redistribution reviews
 decide what can be published. Public releases should publish aggregate stats,
 schemas, prompts, data cards, and reproducibility recipes even when full example
 redistribution is not approved.
+
+The first pilot data card and output-use decision are:
+
+- [`data-cards/pilot-v0.md`](data-cards/pilot-v0.md)
+- [`output-use-decisions/pilot-v0.md`](output-use-decisions/pilot-v0.md)

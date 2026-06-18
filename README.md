@@ -91,6 +91,7 @@ make pilot-generated-review-template REVIEWER="reviewer@example.com"
 make pilot-generated-review-check
 make pilot-train-artifact
 make pilot-train-artifact-check
+make pilot-eval-baseline
 ```
 
 See:
@@ -101,6 +102,8 @@ See:
 - [docs/source-diff-review.md](docs/source-diff-review.md)
 - [docs/teacher-inputs.md](docs/teacher-inputs.md)
 - [docs/training-artifacts.md](docs/training-artifacts.md)
+- [docs/data-cards/pilot-v0.md](docs/data-cards/pilot-v0.md)
+- [docs/output-use-decisions/pilot-v0.md](docs/output-use-decisions/pilot-v0.md)
 - [schemas/generated-label-review.schema.json](schemas/generated-label-review.schema.json)
 - [schemas/training-example.schema.json](schemas/training-example.schema.json)
 - [docs/local-worker-runbook.md](docs/local-worker-runbook.md)

@@ -76,6 +76,30 @@ Expected output shape:
 0 failed
 ```
 
+## Training Artifact Baseline
+
+After a reviewed SFT artifact exists, run the artifact baseline report:
+
+```bash
+make pilot-eval-baseline
+```
+
+This writes:
+
+```text
+artifacts/eval/sft.pilot.v0.baseline.report.json
+```
+
+The report scores three message sources with the same deterministic scorer:
+
+- `target`: the human-accepted or human-edited SFT target;
+- `teacher`: the raw generated teacher label before human edit;
+- `historical`: the original commit subject, kept as weak comparison context.
+
+This report is a data-quality check, not a model-quality claim. `pilot-v0` is
+DEV-only; do not report model progress until `REPORT` and `HELD_OUT` split
+contracts exist.
+
 ## Release Gates
 
 | Gate | Requirement |
