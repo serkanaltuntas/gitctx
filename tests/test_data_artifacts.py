@@ -6,10 +6,12 @@ from pathlib import Path
 from gitctx.data_artifacts import (
     create_generated_label_review_template,
     create_smoke_review_template,
+    create_source_review_template,
     normalize_smoke_report,
     normalize_source_report,
     validate_generated_label_review,
     validate_source_artifact,
+    validate_source_review,
     validate_smoke_review,
     validate_smoke_artifact,
     write_checksums,
@@ -153,11 +155,21 @@ class DataArtifactTests(unittest.TestCase):
 
             report = normalize_source_report(root, artifact_name="pilot")
             summary = validate_source_artifact(root, artifact_name="pilot")
+            review_path = create_source_review_template(
+                root,
+                artifact_name="pilot",
+                reviewer="reviewer@example.com",
+            )
+            review_summary = validate_source_review(root, artifact_name="pilot")
             checksum_path = write_checksums(root)
 
             self.assertEqual(report["output_path"], "artifacts/pilot/source-diffs.pilot.jsonl")
             self.assertEqual(summary["artifact_name"], "pilot")
+            self.assertTrue(review_path.exists())
+            self.assertEqual(review_summary["artifact_name"], "pilot")
+            self.assertEqual(review_summary["needs_review"], 1)
             self.assertIn("source-diffs.pilot.jsonl", checksum_path.read_text())
+            self.assertIn("source-diffs.pilot.review.jsonl", checksum_path.read_text())
 
     def test_creates_and_validates_generated_label_review_template(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

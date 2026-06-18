@@ -73,6 +73,8 @@ make smoke-finalize
 make pilot-source PILOT_RECORDS=250 PILOT_PER_REPO_LIMIT=100
 make pilot-source-check
 make pilot-source-finalize
+make pilot-review-template REVIEWER="reviewer@example.com"
+make pilot-review-check
 make smoke-review-template REVIEWER="reviewer@example.com"
 make smoke-review-check
 make teacher-inputs

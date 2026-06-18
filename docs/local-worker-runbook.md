@@ -127,6 +127,23 @@ The pilot source artifact contains source-diff metadata only. It does not
 generate teacher inputs or model labels. Review and labeling targets for pilot
 data must be added separately before teacher generation starts.
 
+Create the pilot source-diff review template:
+
+```bash
+make pilot-review-template GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" REVIEWER="reviewer@example.com"
+make pilot-review-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+```
+
+This writes:
+
+```text
+reviews/source-diffs.pilot.review.jsonl
+```
+
+Each record starts as `needs_review`. Change it to
+`accepted_for_teacher_labeling` or `rejected` before pilot teacher-input
+generation starts.
+
 ## Prepare Smoke Review Decisions
 
 After the smoke artifact is committed to the private data repository, create a

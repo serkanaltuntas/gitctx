@@ -44,6 +44,13 @@ def source_report_path(artifact_name: str) -> Path:
     return Path("artifacts") / artifact_name / f"source-diffs.{artifact_name}.report.json"
 
 
+def source_review_path(artifact_name: str) -> Path:
+    """Return the source-diff review path for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
+    return Path("reviews") / f"source-diffs.{artifact_name}.review.jsonl"
+
+
 def normalize_smoke_report(data_dir: str | Path) -> dict[str, Any]:
     """Normalize machine-local paths in the smoke report."""
 
@@ -113,12 +120,29 @@ def create_smoke_review_template(
 ) -> Path:
     """Create a review-decision JSONL template for the smoke source diffs."""
 
+    return create_source_review_template(
+        data_dir,
+        artifact_name="smoke",
+        reviewer=reviewer,
+        overwrite=overwrite,
+    )
+
+
+def create_source_review_template(
+    data_dir: str | Path,
+    *,
+    artifact_name: str,
+    reviewer: str,
+    overwrite: bool = False,
+) -> Path:
+    """Create a review-decision JSONL template for a named source artifact."""
+
     data_dir = Path(data_dir)
-    output_path = data_dir / SMOKE_REVIEW
+    output_path = data_dir / source_review_path(artifact_name)
     if output_path.exists() and not overwrite:
         raise SystemExit(f"{output_path} already exists; pass --overwrite to replace it")
 
-    source_records = load_jsonl(data_dir / SMOKE_JSONL)
+    source_records = load_jsonl(data_dir / source_jsonl_path(artifact_name))
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     lines = []
@@ -136,7 +160,7 @@ def create_smoke_review_template(
             "notes": "",
             "reviewer": reviewer,
             "review_timestamp": "TBD",
-            "review_protocol": REVIEW_PROTOCOL,
+            "review_protocol": f"source-diff-{artifact_name}-review-v0.1",
         }
         lines.append(json.dumps(decision, sort_keys=True))
 
@@ -147,9 +171,15 @@ def create_smoke_review_template(
 def validate_smoke_review(data_dir: str | Path) -> dict[str, int]:
     """Validate smoke review decisions against the source-diff artifact."""
 
+    return validate_source_review(data_dir, artifact_name="smoke")
+
+
+def validate_source_review(data_dir: str | Path, *, artifact_name: str) -> dict[str, int]:
+    """Validate review decisions against a named source-diff artifact."""
+
     data_dir = Path(data_dir)
-    source_records = load_jsonl(data_dir / SMOKE_JSONL)
-    review_records = load_jsonl(data_dir / SMOKE_REVIEW)
+    source_records = load_jsonl(data_dir / source_jsonl_path(artifact_name))
+    review_records = load_jsonl(data_dir / source_review_path(artifact_name))
     source_by_id = {record["id"]: record for record in source_records}
     review_ids: set[str] = set()
     failures: list[tuple[str, tuple[str, ...]]] = []
@@ -196,6 +226,7 @@ def validate_smoke_review(data_dir: str | Path) -> dict[str, int]:
         raise SystemExit(1)
 
     summary = {
+        "artifact_name": artifact_name,
         "source_records": len(source_records),
         "review_records": len(review_records),
         **decision_counts,
@@ -319,10 +350,10 @@ def write_checksums(data_dir: str | Path) -> Path:
     if artifacts_dir.exists():
         for artifact_path in sorted(artifacts_dir.glob("*/*.json*")):
             paths.append(artifact_path.relative_to(data_dir))
-    if (data_dir / SMOKE_REVIEW).exists():
-        paths.append(SMOKE_REVIEW)
-    if (data_dir / SMOKE_GENERATED_REVIEW).exists():
-        paths.append(SMOKE_GENERATED_REVIEW)
+    reviews_dir = data_dir / "reviews"
+    if reviews_dir.exists():
+        for review_path in sorted(reviews_dir.glob("*.jsonl")):
+            paths.append(review_path.relative_to(data_dir))
     lines = []
     for relative_path in paths:
         digest = _sha256(data_dir / relative_path)
@@ -358,6 +389,12 @@ def main(argv: list[str] | None = None) -> int:
     review_template.add_argument("--reviewer", required=True)
     review_template.add_argument("--overwrite", action="store_true")
     subparsers.add_parser("validate-smoke-review")
+    source_review_template = subparsers.add_parser("create-source-review-template")
+    source_review_template.add_argument("--artifact-name", required=True)
+    source_review_template.add_argument("--reviewer", required=True)
+    source_review_template.add_argument("--overwrite", action="store_true")
+    validate_source_review_parser = subparsers.add_parser("validate-source-review")
+    validate_source_review_parser.add_argument("--artifact-name", required=True)
     generated_review_template = subparsers.add_parser("create-generated-label-review-template")
     generated_review_template.add_argument("--reviewer", required=True)
     generated_review_template.add_argument("--overwrite", action="store_true")
@@ -383,6 +420,17 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "validate-smoke-review":
         validate_smoke_review(args.data_dir)
+    elif args.command == "create-source-review-template":
+        print(
+            create_source_review_template(
+                args.data_dir,
+                artifact_name=args.artifact_name,
+                reviewer=args.reviewer,
+                overwrite=args.overwrite,
+            )
+        )
+    elif args.command == "validate-source-review":
+        validate_source_review(args.data_dir, artifact_name=args.artifact_name)
     elif args.command == "create-generated-label-review-template":
         print(
             create_generated_label_review_template(
