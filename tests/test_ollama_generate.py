@@ -3,6 +3,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import tempfile
 from pathlib import Path
 from threading import Thread
+from typing import Optional
 import unittest
 
 from gitctx.ollama_generate import (
@@ -99,6 +100,36 @@ class OllamaGenerateTests(unittest.TestCase):
             self.assertIn("scope 'parser_module' is not visible", label["parser_result"]["errors"][0])
             self.assertEqual(label["verifier_score"], 1.0)
 
+    def test_invalid_evidence_paths_become_warnings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root)
+            server, thread = self._start_fake_ollama(
+                evidence_paths=["tests/test_parser.py#L12", "tests/missing.py"],
+            )
+            try:
+                generate_smoke_labels(
+                    root,
+                    ollama_url=f"http://127.0.0.1:{server.server_port}",
+                    resume=False,
+                )
+                validate_smoke_generated_labels(root)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+            label = json.loads(
+                (root / "artifacts/teacher/generated-labels.smoke.jsonl").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(label["evidence_paths"], ["tests/test_parser.py"])
+            self.assertIn(
+                "dropped evidence_paths not present in changed_paths: tests/missing.py",
+                label["warnings"],
+            )
+
     def _write_teacher_inputs(self, root: Path, *, artifact_name: str = "smoke") -> None:
         (root / "artifacts/teacher").mkdir(parents=True)
         record = {
@@ -139,7 +170,10 @@ class OllamaGenerateTests(unittest.TestCase):
         *,
         header: str = "fix(parser): handle empty values",
         scope: str = "parser",
+        evidence_paths: Optional[list[str]] = None,
     ) -> tuple[HTTPServer, Thread]:
+        evidence_paths = evidence_paths or ["src/parser.py", "tests/test_parser.py"]
+
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self) -> None:  # noqa: N802 - stdlib callback.
                 length = int(self.headers["Content-Length"])
@@ -155,7 +189,7 @@ class OllamaGenerateTests(unittest.TestCase):
                                 "scope": scope,
                                 "confidence": 0.9,
                                 "warnings": [],
-                                "evidence_paths": ["src/parser.py", "tests/test_parser.py"],
+                                "evidence_paths": evidence_paths,
                             }
                         )
                     }

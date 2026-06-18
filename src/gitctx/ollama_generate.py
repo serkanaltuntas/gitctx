@@ -277,7 +277,11 @@ def _build_generated_label(
     body = _require_candidate_list(candidate, "body")
     footers = _require_candidate_list(candidate, "footers")
     warnings = _require_candidate_list(candidate, "warnings")
-    evidence_paths = _require_candidate_list(candidate, "evidence_paths")
+    evidence_paths, evidence_warnings = _sanitize_evidence_paths(
+        _require_candidate_list(candidate, "evidence_paths"),
+        teacher_input["changed_paths"],
+    )
+    warnings = [*warnings, *evidence_warnings]
     score = score_commit_message(
         "\n".join([header, *body, *footers]),
         CommitContext(changed_paths=tuple(teacher_input["changed_paths"])),
@@ -348,6 +352,35 @@ def _candidate_confidence(candidate: dict[str, Any]) -> float:
     if not isinstance(value, (int, float)):
         raise ValueError("teacher output confidence must be numeric")
     return max(0.0, min(1.0, float(value)))
+
+
+def _sanitize_evidence_paths(
+    evidence_paths: list[str],
+    changed_paths: list[str],
+) -> tuple[list[str], list[str]]:
+    changed_path_set = set(changed_paths)
+    normalized_paths: list[str] = []
+    dropped_paths: list[str] = []
+
+    for path in evidence_paths:
+        normalized = _normalize_evidence_path(path)
+        if normalized in changed_path_set:
+            if normalized not in normalized_paths:
+                normalized_paths.append(normalized)
+        else:
+            dropped_paths.append(path)
+
+    warnings = []
+    if dropped_paths:
+        warnings.append(
+            "dropped evidence_paths not present in changed_paths: "
+            + ", ".join(sorted(dropped_paths))
+        )
+    return normalized_paths, warnings
+
+
+def _normalize_evidence_path(path: str) -> str:
+    return re.sub(r"(#L\d+(?:-L?\d+)?|:\d+(?::\d+)?)$", "", path)
 
 
 def _verifier_score(
