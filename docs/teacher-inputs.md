@@ -105,4 +105,13 @@ reviews/generated-labels.smoke.review.jsonl
 Each generated-label review records `accept`, `edit`, or `reject`, optional
 issue tags, optional edited text, reviewer identity, timestamp, and notes.
 Generated labels are not approved as training data until this review is
-complete and a follow-up data-card/output-use decision promotes them.
+complete and the training-artifact step promotes only accepted or edited labels.
+
+Create the pilot supervised fine-tuning artifact:
+
+```bash
+make pilot-train-artifact
+make pilot-train-artifact-check
+```
+
+See [`training-artifacts.md`](training-artifacts.md) for the promotion contract.

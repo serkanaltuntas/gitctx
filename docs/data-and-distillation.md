@@ -32,6 +32,17 @@ source manifest.
 6. Keep original human messages as comparison/context, not as automatic truth.
 7. Reserve held-out repositories and time windows before teacher generation.
 
+## Training Promotion
+
+Raw teacher outputs are not training data. They become supervised fine-tuning
+examples only after generated-label review promotes them with `accept` or
+`edit`.
+
+The promoted record keeps the source diff, teacher label, human review decision,
+and final target message in one auditable JSONL example. The contract is
+documented in [`training-artifacts.md`](training-artifacts.md) and
+[`schemas/training-example.schema.json`](../schemas/training-example.schema.json).
+
 ## Teacher Policy
 
 - Self-hosted teacher inference is preferred.

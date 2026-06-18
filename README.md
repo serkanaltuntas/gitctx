@@ -89,6 +89,8 @@ make generated-review-template REVIEWER="reviewer@example.com"
 make generated-review-check
 make pilot-generated-review-template REVIEWER="reviewer@example.com"
 make pilot-generated-review-check
+make pilot-train-artifact
+make pilot-train-artifact-check
 ```
 
 See:
@@ -98,7 +100,9 @@ See:
 - [docs/source-manifest.md](docs/source-manifest.md)
 - [docs/source-diff-review.md](docs/source-diff-review.md)
 - [docs/teacher-inputs.md](docs/teacher-inputs.md)
+- [docs/training-artifacts.md](docs/training-artifacts.md)
 - [schemas/generated-label-review.schema.json](schemas/generated-label-review.schema.json)
+- [schemas/training-example.schema.json](schemas/training-example.schema.json)
 - [docs/local-worker-runbook.md](docs/local-worker-runbook.md)
 - [docs/teacher-model-shortlist.md](docs/teacher-model-shortlist.md)
 - [docs/teacher-audit-plan.md](docs/teacher-audit-plan.md)
