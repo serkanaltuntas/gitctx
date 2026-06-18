@@ -50,6 +50,28 @@ HUMAN_REVIEW_STATUSES = frozenset(
         "reject",
     }
 )
+GENERATED_LABEL_REVIEW_DECISIONS = frozenset(
+    {
+        "needs_review",
+        "accept",
+        "edit",
+        "reject",
+    }
+)
+GENERATED_LABEL_REVIEW_ISSUES = frozenset(
+    {
+        "scope_issue",
+        "type_issue",
+        "subject_issue",
+        "body_issue",
+        "footer_issue",
+        "factual_issue",
+        "evidence_issue",
+        "mixed_change_issue",
+        "too_verbose",
+        "invalid_format",
+    }
+)
 TEACHER_INPUT_STATUSES = frozenset(
     {
         "ready_for_generation",
@@ -352,6 +374,62 @@ def validate_teacher_input_record(record: Mapping[str, Any]) -> tuple[str, ...]:
     decoding_config = record.get("decoding_config")
     if not isinstance(decoding_config, dict):
         errors.append("decoding_config must be an object")
+
+    return tuple(errors)
+
+
+def validate_generated_label_review_decision(record: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return validation errors for one generated-label human-review decision."""
+
+    errors: list[str] = []
+
+    for key in (
+        "id",
+        "generated_label_id",
+        "source_repo_url",
+        "source_commit",
+        "teacher_model_id",
+        "prompt_version",
+        "header",
+        "decision",
+        "reviewer",
+        "review_timestamp",
+        "review_protocol",
+    ):
+        _require_str(record, key, errors)
+
+    notes = record.get("notes")
+    if not isinstance(notes, str):
+        errors.append("notes must be a string")
+
+    source_commit = record.get("source_commit")
+    if isinstance(source_commit, str) and not _HEX_REVISION_RE.match(source_commit):
+        errors.append("source_commit must be a 7-40 character lowercase hex revision")
+
+    prompt_version = record.get("prompt_version")
+    if isinstance(prompt_version, str) and not _PROMPT_VERSION_RE.match(prompt_version):
+        errors.append("prompt_version must be a stable lowercase identifier")
+
+    decision = record.get("decision")
+    if isinstance(decision, str) and decision not in GENERATED_LABEL_REVIEW_DECISIONS:
+        errors.append(f"invalid decision: {decision}")
+
+    _require_list(record, "issues", errors)
+    issues = record.get("issues")
+    if isinstance(issues, list):
+        invalid = sorted({issue for issue in issues if issue not in GENERATED_LABEL_REVIEW_ISSUES})
+        if invalid:
+            errors.append(f"invalid issues: {invalid}")
+
+    edited_header = record.get("edited_header")
+    if edited_header is not None and not isinstance(edited_header, str):
+        errors.append("edited_header must be a string or null")
+
+    edited_body = record.get("edited_body")
+    if edited_body is not None and not (
+        isinstance(edited_body, list) and all(isinstance(item, str) for item in edited_body)
+    ):
+        errors.append("edited_body must be a list of strings or null")
 
     return tuple(errors)
 

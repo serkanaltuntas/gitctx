@@ -76,6 +76,8 @@ make teacher-inputs
 make teacher-input-check
 make teacher-generate
 make teacher-generate-check
+make generated-review-template REVIEWER="reviewer@example.com"
+make generated-review-check
 ```
 
 See:
@@ -85,6 +87,7 @@ See:
 - [docs/source-manifest.md](docs/source-manifest.md)
 - [docs/source-diff-review.md](docs/source-diff-review.md)
 - [docs/teacher-inputs.md](docs/teacher-inputs.md)
+- [schemas/generated-label-review.schema.json](schemas/generated-label-review.schema.json)
 - [docs/local-worker-runbook.md](docs/local-worker-runbook.md)
 - [docs/teacher-model-shortlist.md](docs/teacher-model-shortlist.md)
 - [docs/teacher-audit-plan.md](docs/teacher-audit-plan.md)

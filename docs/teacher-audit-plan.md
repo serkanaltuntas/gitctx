@@ -115,7 +115,11 @@ Run deterministic checks before human review:
 - JSON schema validity;
 - Conventional Commit parse validity;
 - allowed type;
-- scope matches touched paths when clear;
+- scope matches touched paths when clear. The deterministic checker accepts
+  stable module/package scopes derived from path components, file names, file
+  stems, and package prefixes; it should not reject reasonable scopes such as
+  `models`, `_types.py`, `termui`, or `requests/sessions` just because they are
+  not full paths;
 - subject is specific and concise;
 - body present when the fixture or heuristic expects it;
 - footer present when breaking-change cues exist;
@@ -140,6 +144,12 @@ Record:
 - mixed change missed;
 - too verbose;
 - invalid JSON or invalid Conventional Commit.
+
+Use `reviews/generated-labels.smoke.review.jsonl` for the first generated-label
+review pass. Decisions are `needs_review`, `accept`, `edit`, or `reject`; issue
+tags are `scope_issue`, `type_issue`, `subject_issue`, `body_issue`,
+`footer_issue`, `factual_issue`, `evidence_issue`, `mixed_change_issue`,
+`too_verbose`, and `invalid_format`.
 
 ## Promotion Gate
 

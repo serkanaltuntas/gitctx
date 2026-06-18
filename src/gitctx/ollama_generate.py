@@ -304,11 +304,16 @@ def _verifier_score(
     evidence_paths: list[str],
     changed_paths: list[str],
 ) -> float:
+    fatal_errors = [
+        error
+        for error in parser_result["errors"]
+        if not error.startswith("scope ") or " is not visible in changed paths" not in error
+    ]
     checks = [
         parser_result["format_validity"],
         parser_result["specificity"],
         parser_result["brevity"],
-        not parser_result["errors"],
+        not fatal_errors,
         bool(evidence_paths),
         set(evidence_paths).issubset(set(changed_paths)),
     ]

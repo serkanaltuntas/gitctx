@@ -251,16 +251,42 @@ def _score_scope(parsed: ParsedCommit, context: CommitContext, errors: list[str]
     if not context.changed_paths or parsed.scope is None:
         return None
 
-    path_parts = {
-        part
-        for path in context.changed_paths
-        for part in path.replace("\\", "/").split("/")
-        if part and "." not in part
-    }
-    ok = parsed.scope in path_parts
+    ok = _scope_is_visible(parsed.scope, context.changed_paths)
     if not ok:
         errors.append(f"scope {parsed.scope!r} is not visible in changed paths")
     return ok
+
+
+def _scope_is_visible(scope: str, changed_paths: tuple[str, ...]) -> bool:
+    normalized_scope = scope.strip().strip("/").replace("\\", "/")
+    if not normalized_scope:
+        return False
+
+    visible_scopes: set[str] = set()
+    for path in changed_paths:
+        normalized_path = path.replace("\\", "/").strip("/")
+        parts = tuple(part for part in normalized_path.split("/") if part)
+        if not parts:
+            continue
+
+        visible_scopes.add(normalized_path)
+        basename = parts[-1]
+        visible_scopes.add(basename)
+        stem = basename.rsplit(".", 1)[0]
+        visible_scopes.add(stem)
+        visible_scopes.add(stem.lstrip("_"))
+
+        for part in parts[:-1]:
+            visible_scopes.add(part)
+            visible_scopes.add(part.lstrip("_"))
+
+        for index in range(len(parts)):
+            prefix = "/".join(parts[index:])
+            visible_scopes.add(prefix)
+            if "." in prefix:
+                visible_scopes.add(prefix.rsplit(".", 1)[0])
+
+    return normalized_scope in visible_scopes
 
 
 def _score_factuality(parsed: ParsedCommit, context: CommitContext, errors: list[str]) -> bool | None:

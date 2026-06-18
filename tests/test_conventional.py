@@ -103,6 +103,37 @@ class ConventionalCommitScorerTests(unittest.TestCase):
         self.assertFalse(score.body_presence)
         self.assertIn("expected commit body", score.errors)
 
+    def test_accepts_module_and_path_derived_scopes(self) -> None:
+        cases = (
+            (
+                "fix(termui): keep pager stdout open",
+                ("src/click/_termui_impl.py", "src/click/termui.py"),
+            ),
+            (
+                "refactor(models.py): add file-like proxy check",
+                ("src/requests/models.py",),
+            ),
+            (
+                "refactor(models): type hooks attribute",
+                ("src/requests/models.py",),
+            ),
+            (
+                "refactor(_types.py): add Sequence to JsonType",
+                ("src/requests/_types.py",),
+            ),
+            (
+                "feat(requests/sessions): add params to get",
+                ("src/requests/sessions.py",),
+            ),
+        )
+
+        for message, changed_paths in cases:
+            with self.subTest(message=message):
+                score = score_commit_message(message, CommitContext(changed_paths=changed_paths))
+
+                self.assertTrue(score.scope_quality)
+                self.assertEqual(score.errors, ())
+
 
 class FixtureRunnerTests(unittest.TestCase):
     def test_dev_fixture_cases_pass(self) -> None:

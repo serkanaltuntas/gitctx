@@ -4,8 +4,10 @@ import unittest
 from pathlib import Path
 
 from gitctx.data_artifacts import (
+    create_generated_label_review_template,
     create_smoke_review_template,
     normalize_smoke_report,
+    validate_generated_label_review,
     validate_smoke_review,
     validate_smoke_artifact,
     write_checksums,
@@ -90,6 +92,58 @@ class DataArtifactTests(unittest.TestCase):
             self.assertTrue(checksum_path.exists())
             self.assertIn("source-diffs.smoke.jsonl", checksum_path.read_text())
             self.assertIn("source-diffs.smoke.review.jsonl", checksum_path.read_text())
+
+    def test_creates_and_validates_generated_label_review_template(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "artifacts/teacher").mkdir(parents=True)
+            (root / "reviews").mkdir()
+            (root / "artifacts/teacher/generated-labels.smoke.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": "generated-example-repo-111111111111",
+                        "source_repo_url": "https://github.com/example/repo",
+                        "source_license": "MIT",
+                        "source_commit": "1111111111111111111111111111111111111111",
+                        "parent_commit": "0000000000000000000000000000000000000000",
+                        "data_split": "DEV",
+                        "changed_paths": ["src/parser.py"],
+                        "teacher_model_id": "ollama/qwen2.5-coder:7b",
+                        "teacher_runtime": "ollama",
+                        "teacher_runtime_model_id": "qwen2.5-coder:7b",
+                        "teacher_revision": "dae161e27b0e",
+                        "teacher_license": "Apache-2.0",
+                        "teacher_size": "4.7 GB",
+                        "teacher_context_length": "32K",
+                        "prompt_version": "commit-message-teacher-v0.1",
+                        "decoding_config": {"temperature": 0.0},
+                        "generation_timestamp": "2026-06-18T04:11:54Z",
+                        "header": "fix(parser): handle empty values",
+                        "body": [],
+                        "footers": [],
+                        "type": "fix",
+                        "scope": "parser",
+                        "confidence": 1.0,
+                        "warnings": [],
+                        "evidence_paths": ["src/parser.py"],
+                        "parser_result": {},
+                        "verifier_score": 1.0,
+                        "human_review_status": "not_reviewed",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            review_path = create_generated_label_review_template(
+                root,
+                reviewer="reviewer@example.com",
+            )
+            summary = validate_generated_label_review(root)
+
+            self.assertTrue(review_path.exists())
+            self.assertEqual(summary["generated_label_records"], 1)
+            self.assertEqual(summary["needs_review"], 1)
 
     def test_review_validation_rejects_missing_decision(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -2,6 +2,7 @@ import unittest
 
 from gitctx.provenance import (
     load_jsonl,
+    validate_generated_label_review_decision,
     validate_generated_label_record,
     validate_source_diff_review_decision,
     validate_source_manifest_entry,
@@ -62,6 +63,54 @@ class SourceDiffReviewValidationTests(unittest.TestCase):
         errors = validate_source_diff_review_decision(record)
 
         self.assertIn("invalid decision: maybe", errors)
+
+
+class GeneratedLabelReviewValidationTests(unittest.TestCase):
+    def test_generated_label_review_decision_is_valid(self) -> None:
+        record = {
+            "id": "review-generated-example-repo-111111111111",
+            "generated_label_id": "generated-example-repo-111111111111",
+            "source_repo_url": "https://github.com/example/repo",
+            "source_commit": "1111111111111111111111111111111111111111",
+            "teacher_model_id": "ollama/qwen2.5-coder:7b",
+            "prompt_version": "commit-message-teacher-v0.1",
+            "header": "fix(parser): handle empty values",
+            "verifier_score": 1.0,
+            "decision": "accept",
+            "issues": [],
+            "edited_header": None,
+            "edited_body": None,
+            "notes": "",
+            "reviewer": "reviewer@example.com",
+            "review_timestamp": "2026-06-18T20:00:00Z",
+            "review_protocol": "generated-label-smoke-review-v0.1",
+        }
+
+        self.assertEqual(validate_generated_label_review_decision(record), ())
+
+    def test_generated_label_review_rejects_unknown_issue(self) -> None:
+        record = {
+            "id": "review-generated-example-repo-111111111111",
+            "generated_label_id": "generated-example-repo-111111111111",
+            "source_repo_url": "https://github.com/example/repo",
+            "source_commit": "1111111111111111111111111111111111111111",
+            "teacher_model_id": "ollama/qwen2.5-coder:7b",
+            "prompt_version": "commit-message-teacher-v0.1",
+            "header": "fix(parser): handle empty values",
+            "verifier_score": 1.0,
+            "decision": "accept",
+            "issues": ["surprise_issue"],
+            "edited_header": None,
+            "edited_body": None,
+            "notes": "",
+            "reviewer": "reviewer@example.com",
+            "review_timestamp": "2026-06-18T20:00:00Z",
+            "review_protocol": "generated-label-smoke-review-v0.1",
+        }
+
+        errors = validate_generated_label_review_decision(record)
+
+        self.assertIn("invalid issues: ['surprise_issue']", errors)
 
 
 if __name__ == "__main__":

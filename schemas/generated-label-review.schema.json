@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitctx.com/schemas/generated-label-review.schema.json",
+  "title": "gitctx generated label human review record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "generated_label_id",
+    "source_repo_url",
+    "source_commit",
+    "teacher_model_id",
+    "prompt_version",
+    "header",
+    "verifier_score",
+    "decision",
+    "issues",
+    "edited_header",
+    "edited_body",
+    "notes",
+    "reviewer",
+    "review_timestamp",
+    "review_protocol"
+  ],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "generated_label_id": {"type": "string", "minLength": 1},
+    "source_repo_url": {"type": "string", "minLength": 1},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "teacher_model_id": {"type": "string", "minLength": 1},
+    "prompt_version": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]*$"},
+    "header": {"type": "string", "minLength": 1},
+    "verifier_score": {"type": "number", "minimum": 0, "maximum": 1},
+    "decision": {
+      "type": "string",
+      "enum": ["needs_review", "accept", "edit", "reject"]
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "scope_issue",
+          "type_issue",
+          "subject_issue",
+          "body_issue",
+          "footer_issue",
+          "factual_issue",
+          "evidence_issue",
+          "mixed_change_issue",
+          "too_verbose",
+          "invalid_format"
+        ]
+      }
+    },
+    "edited_header": {"type": ["string", "null"]},
+    "edited_body": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "array", "items": {"type": "string"}}
+      ]
+    },
+    "notes": {"type": "string"},
+    "reviewer": {"type": "string", "minLength": 1},
+    "review_timestamp": {"type": "string", "minLength": 1},
+    "review_protocol": {"type": "string", "minLength": 1}
+  }
+}

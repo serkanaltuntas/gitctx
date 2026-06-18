@@ -167,3 +167,24 @@ artifacts/teacher/generated-labels.smoke.report.json
 
 If the worker stops, rerun `make teacher-generate`; it resumes by skipping
 existing generated-label ids.
+
+## Prepare Generated-Label Review
+
+After generated labels validate, create a human-review template:
+
+```bash
+make generated-review-template GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" REVIEWER="reviewer@example.com"
+make generated-review-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+```
+
+This writes:
+
+```text
+reviews/generated-labels.smoke.review.jsonl
+```
+
+Review decisions start as `needs_review`. Use `accept`, `edit`, or `reject`
+after inspecting the generated label against the diff. Use issue tags such as
+`scope_issue`, `type_issue`, `subject_issue`, `body_issue`, `footer_issue`,
+`factual_issue`, `evidence_issue`, `mixed_change_issue`, `too_verbose`, or
+`invalid_format`.

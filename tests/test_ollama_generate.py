@@ -42,6 +42,33 @@ class OllamaGenerateTests(unittest.TestCase):
             self.assertEqual(server.seen_payload["options"]["num_ctx"], 4096)  # type: ignore[attr-defined]
             self.assertEqual(server.seen_payload["options"]["num_predict"], 256)  # type: ignore[attr-defined]
 
+    def test_scope_only_parser_error_does_not_lower_verifier_score(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root)
+            server, thread = self._start_fake_ollama(
+                header="fix(parser_module): handle empty values",
+                scope="parser_module",
+            )
+            try:
+                generate_smoke_labels(
+                    root,
+                    ollama_url=f"http://127.0.0.1:{server.server_port}",
+                    resume=False,
+                )
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+            label = json.loads(
+                (root / "artifacts/teacher/generated-labels.smoke.jsonl").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertIn("scope 'parser_module' is not visible", label["parser_result"]["errors"][0])
+            self.assertEqual(label["verifier_score"], 1.0)
+
     def _write_teacher_inputs(self, root: Path) -> None:
         (root / "artifacts/teacher").mkdir(parents=True)
         record = {
@@ -77,7 +104,12 @@ class OllamaGenerateTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def _start_fake_ollama(self) -> tuple[HTTPServer, Thread]:
+    def _start_fake_ollama(
+        self,
+        *,
+        header: str = "fix(parser): handle empty values",
+        scope: str = "parser",
+    ) -> tuple[HTTPServer, Thread]:
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self) -> None:  # noqa: N802 - stdlib callback.
                 length = int(self.headers["Content-Length"])
@@ -86,11 +118,11 @@ class OllamaGenerateTests(unittest.TestCase):
                     "message": {
                         "content": json.dumps(
                             {
-                                "header": "fix(parser): handle empty values",
+                                "header": header,
                                 "body": [],
                                 "footers": [],
                                 "type": "fix",
-                                "scope": "parser",
+                                "scope": scope,
                                 "confidence": 0.9,
                                 "warnings": [],
                                 "evidence_paths": ["src/parser.py", "tests/test_parser.py"],

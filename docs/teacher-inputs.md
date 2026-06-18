@@ -58,3 +58,21 @@ make teacher-generate-check
 Generation sends one teacher input record per Ollama call. Do not batch many
 diffs into one prompt; per-record calls keep provenance, validation, retries,
 and resume behavior clean.
+
+Prepare generated-label human review:
+
+```bash
+make generated-review-template REVIEWER="reviewer@example.com"
+make generated-review-check
+```
+
+The review artifact is private:
+
+```text
+reviews/generated-labels.smoke.review.jsonl
+```
+
+Each generated-label review records `accept`, `edit`, or `reject`, optional
+issue tags, optional edited text, reviewer identity, timestamp, and notes.
+Generated labels are not approved as training data until this review is
+complete and a follow-up data-card/output-use decision promotes them.
