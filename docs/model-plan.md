@@ -35,6 +35,27 @@ Output:
 The project should not start with 1B. The first proof model should falsify data
 and evaluation assumptions cheaply.
 
+## Proof-Model Gate
+
+GCTX-1 is not unlocked by the existence of a tiny `DEV` artifact. A local smoke
+model may be trained earlier to test code paths, but it carries no quality
+claim.
+
+Minimum GCTX-1 proof-run conditions:
+
+- 10,000 reviewed `DEV` training records;
+- 1,000 `REPORT` records;
+- 1,000 reserved `HELD_OUT` candidates;
+- at least 25 training repositories;
+- at least 5 `REPORT` repositories or non-overlapping report windows;
+- at least 5 `HELD_OUT` repositories;
+- at least two programming-language ecosystems;
+- no single repository contributes more than 25% of training records;
+- deterministic, raw-teacher, historical-subject, and reviewed-target
+  baselines are recorded.
+
+The split policy is defined in [`split-contract.md`](split-contract.md).
+
 ## Recommended First Public Model
 
 - 150M-300M decoder-only model;
@@ -50,4 +71,3 @@ and evaluation assumptions cheaply.
 - Automatic commit or push.
 - Training on closed-model outputs.
 - Private repository ingestion without explicit permission.
-

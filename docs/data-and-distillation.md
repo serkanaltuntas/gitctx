@@ -46,6 +46,8 @@ documented in [`training-artifacts.md`](training-artifacts.md) and
 The first pilot data-card and output-use decision are documented in
 [`data-cards/pilot-v0.md`](data-cards/pilot-v0.md) and
 [`output-use-decisions/pilot-v0.md`](output-use-decisions/pilot-v0.md).
+The split and proof-model readiness rules are documented in
+[`split-contract.md`](split-contract.md).
 
 ## Teacher Policy
 

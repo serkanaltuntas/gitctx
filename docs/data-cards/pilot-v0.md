@@ -114,7 +114,7 @@ Not allowed:
 
 Before proof-model training is treated as meaningful:
 
-- add a baseline/eval report for target, teacher, and historical messages;
-- create a `REPORT` split policy before reporting model progress;
+- use the split contract in [`split-contract.md`](../split-contract.md);
+- create `REPORT` and `HELD_OUT` artifacts before reporting model progress;
 - reserve HELD_OUT repositories or time ranges before any release claim;
 - expand beyond the first tiny audit source set.

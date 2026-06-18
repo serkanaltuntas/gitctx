@@ -8,6 +8,10 @@ gitctx needs repo-shaped evaluations, not general language benchmarks.
 - `REPORT`: public progress reporting.
 - `HELD_OUT`: private until release claims are made.
 
+The binding split rules are in [`split-contract.md`](split-contract.md). In
+short: split assignment must happen before teacher generation, the default unit
+is repository plus time window, and `pilot-v0` is `DEV` only.
+
 ## Metrics
 
 | Metric | Meaning |
@@ -97,8 +101,8 @@ The report scores three message sources with the same deterministic scorer:
 - `historical`: the original commit subject, kept as weak comparison context.
 
 This report is a data-quality check, not a model-quality claim. `pilot-v0` is
-DEV-only; do not report model progress until `REPORT` and `HELD_OUT` split
-contracts exist.
+DEV-only; do not report model progress until `REPORT` and `HELD_OUT` artifacts
+exist under the split contract.
 
 ## Release Gates
 

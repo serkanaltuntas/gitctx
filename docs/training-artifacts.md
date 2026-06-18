@@ -46,6 +46,10 @@ This is intentionally verbose. The training record must be reproducible,
 auditable, and removable by source repository, teacher model, prompt version, or
 review decision.
 
+Splits are governed by [`split-contract.md`](split-contract.md). Training
+artifacts must not move examples across `DEV`, `REPORT`, or `HELD_OUT` after
+teacher generation.
+
 ## Commands
 
 Create the pilot training artifact after generated-label review is complete:
