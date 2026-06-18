@@ -7,7 +7,9 @@ from gitctx.data_artifacts import (
     create_generated_label_review_template,
     create_smoke_review_template,
     normalize_smoke_report,
+    normalize_source_report,
     validate_generated_label_review,
+    validate_source_artifact,
     validate_smoke_review,
     validate_smoke_artifact,
     write_checksums,
@@ -92,6 +94,70 @@ class DataArtifactTests(unittest.TestCase):
             self.assertTrue(checksum_path.exists())
             self.assertIn("source-diffs.smoke.jsonl", checksum_path.read_text())
             self.assertIn("source-diffs.smoke.review.jsonl", checksum_path.read_text())
+
+    def test_normalizes_and_validates_named_source_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "artifacts/pilot").mkdir(parents=True)
+            (root / "manifests").mkdir()
+            (root / "lineage").mkdir()
+            source_record = {
+                "id": "example-repo-111111111111",
+                "source_repo_url": "https://github.com/example/repo",
+                "source_license": "MIT",
+                "manifest_revision": "1111111111111111111111111111111111111111",
+                "source_commit": "1111111111111111111111111111111111111111",
+                "parent_commit": "0000000000000000000000000000000000000000",
+                "data_split": "DEV",
+                "changed_paths": ["parser.py"],
+                "excluded_paths": [],
+                "diff_stat": " parser.py | 1 +",
+                "historical_subject": "fix(parser): reject empty values",
+                "extraction_command": "git diff --stat ...",
+                "review_status": "not_reviewed",
+            }
+            manifest_record = {
+                "repo_url": "https://github.com/example/repo",
+                "default_branch": "main",
+                "source_license": "MIT",
+                "license_url": "https://example.com/license",
+                "license_review_date": "2026-06-18",
+                "reviewer": "Test User",
+                "review_status": "approved_for_audit",
+                "source_revision": "1111111111111111111111111111111111111111",
+                "allowed_splits": ["DEV"],
+                "exclude_globs": ["vendor/**"],
+                "notes": "test",
+            }
+            (root / "artifacts/pilot/source-diffs.pilot.jsonl").write_text(
+                json.dumps(source_record) + "\n",
+                encoding="utf-8",
+            )
+            (root / "artifacts/pilot/source-diffs.pilot.report.json").write_text(
+                json.dumps(
+                    {
+                        "data_dir": "/private/path",
+                        "manifest_path": "manifests/source-manifest.audit.jsonl",
+                        "output_path": "/private/path/artifacts/pilot/source-diffs.pilot.jsonl",
+                        "written_records": 1,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "manifests/source-manifest.audit.jsonl").write_text(
+                json.dumps(manifest_record) + "\n",
+                encoding="utf-8",
+            )
+            (root / "lineage/gitctx-public-commit.txt").write_text("abc1234\n", encoding="utf-8")
+
+            report = normalize_source_report(root, artifact_name="pilot")
+            summary = validate_source_artifact(root, artifact_name="pilot")
+            checksum_path = write_checksums(root)
+
+            self.assertEqual(report["output_path"], "artifacts/pilot/source-diffs.pilot.jsonl")
+            self.assertEqual(summary["artifact_name"], "pilot")
+            self.assertIn("source-diffs.pilot.jsonl", checksum_path.read_text())
 
     def test_creates_and_validates_generated_label_review_template(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

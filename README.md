@@ -70,6 +70,9 @@ Run local source-diff smoke extraction:
 make smoke
 make smoke-check
 make smoke-finalize
+make pilot-source PILOT_RECORDS=250 PILOT_PER_REPO_LIMIT=100
+make pilot-source-check
+make pilot-source-finalize
 make smoke-review-template REVIEWER="reviewer@example.com"
 make smoke-review-check
 make teacher-inputs

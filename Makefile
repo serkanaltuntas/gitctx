@@ -2,14 +2,18 @@ GITCTX_DATA_DIR ?= $(HOME)/LAB/gitctx-data
 PYTHON ?= python3
 SMOKE_MANIFEST ?= manifests/source-manifest.audit.jsonl
 SMOKE_RECORDS ?= 50
+PILOT_RECORDS ?= 250
+PILOT_PER_REPO_LIMIT ?= 100
 SMOKE_REPORT = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.report.json
 SMOKE_JSONL = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.jsonl
+PILOT_REPORT = $(GITCTX_DATA_DIR)/artifacts/pilot/source-diffs.pilot.report.json
+PILOT_JSONL = $(GITCTX_DATA_DIR)/artifacts/pilot/source-diffs.pilot.jsonl
 REVIEWER ?= reviewer@example.com
 OLLAMA_NUM_CTX ?= 8192
 OLLAMA_NUM_PREDICT ?= 1024
 OLLAMA_REQUEST_TIMEOUT ?= 300
 
-.PHONY: data-dir smoke smoke-check smoke-finalize smoke-review-template smoke-review-check teacher-inputs teacher-input-check teacher-generate teacher-generate-check generated-review-template generated-review-check test fixture-eval
+.PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize smoke-review-template smoke-review-check teacher-inputs teacher-input-check teacher-generate teacher-generate-check generated-review-template generated-review-check test fixture-eval
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -18,7 +22,8 @@ smoke: data-dir
 	PYTHONPATH=src $(PYTHON) -m gitctx.worker_smoke \
 		--manifest "$(SMOKE_MANIFEST)" \
 		--data-dir "$(GITCTX_DATA_DIR)" \
-		--records "$(SMOKE_RECORDS)"
+		--records "$(SMOKE_RECORDS)" \
+		--artifact-name smoke
 
 smoke-check:
 	$(PYTHON) -m json.tool "$(SMOKE_REPORT)"
@@ -34,6 +39,26 @@ smoke-checksum:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 smoke-finalize: smoke-normalize smoke-validate smoke-checksum
+
+pilot-source: data-dir
+	PYTHONPATH=src $(PYTHON) -m gitctx.worker_smoke \
+		--manifest "$(SMOKE_MANIFEST)" \
+		--data-dir "$(GITCTX_DATA_DIR)" \
+		--records "$(PILOT_RECORDS)" \
+		--per-repo-limit "$(PILOT_PER_REPO_LIMIT)" \
+		--artifact-name pilot
+
+pilot-source-check:
+	$(PYTHON) -m json.tool "$(PILOT_REPORT)"
+	wc -l "$(PILOT_JSONL)"
+
+pilot-source-normalize:
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" normalize-source --artifact-name pilot
+
+pilot-source-validate:
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-source --artifact-name pilot
+
+pilot-source-finalize: pilot-source-normalize pilot-source-validate smoke-checksum
 
 smoke-review-template:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" create-smoke-review-template --reviewer "$(REVIEWER)"

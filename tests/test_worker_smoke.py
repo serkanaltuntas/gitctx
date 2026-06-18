@@ -68,6 +68,61 @@ class WorkerSmokeTests(unittest.TestCase):
             records = load_jsonl(output_path)
             self.assertEqual(records[0]["historical_subject"], "fix(parser): reject empty values")
 
+    def test_run_smoke_can_write_named_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = root / "remote"
+            work = root / "work"
+            data_dir = root / "data"
+            remote.mkdir()
+            work.mkdir()
+            _git(remote, "init", "--bare")
+            _git(work, "init")
+            _git(work, "config", "user.email", "test@example.com")
+            _git(work, "config", "user.name", "Test User")
+            _git(work, "remote", "add", "origin", str(remote))
+
+            (work / "parser.py").write_text("old = True\n", encoding="utf-8")
+            _git(work, "add", "parser.py")
+            _git(work, "commit", "-m", "chore: initial parser")
+            (work / "parser.py").write_text("old = False\n", encoding="utf-8")
+            _git(work, "commit", "-am", "fix(parser): reject empty values")
+            revision = _git(work, "rev-parse", "HEAD")
+            _git(work, "push", "origin", "HEAD:main")
+
+            manifest = root / "manifest.jsonl"
+            manifest.write_text(
+                "{"
+                "\"repo_url\":\"https://github.com/example/repo\","
+                f"\"clone_url\":\"{remote}\","
+                "\"default_branch\":\"main\","
+                "\"source_license\":\"MIT\","
+                f"\"license_url\":\"https://example.com/license\","
+                "\"license_review_date\":\"2026-06-17\","
+                "\"reviewer\":\"Test User\","
+                "\"review_status\":\"approved_for_audit\","
+                f"\"source_revision\":\"{revision}\","
+                "\"allowed_splits\":[\"DEV\"],"
+                "\"exclude_globs\":[\"vendor/**\"],"
+                "\"notes\":\"test fixture\""
+                "}\n",
+                encoding="utf-8",
+            )
+
+            from gitctx.worker_smoke import run_source_extract
+
+            report = run_source_extract(
+                manifest,
+                data_dir,
+                artifact_name="pilot",
+                records=5,
+                per_repo_limit=5,
+            )
+
+            self.assertEqual(report["artifact_name"], "pilot")
+            self.assertEqual(Path(report["output_path"]).name, "source-diffs.pilot.jsonl")
+            self.assertTrue((data_dir / "artifacts/pilot/source-diffs.pilot.jsonl").exists())
+
 
 def _git(repo: Path, *args: str) -> str:
     completed = subprocess.run(

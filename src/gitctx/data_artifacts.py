@@ -30,15 +30,36 @@ REVIEW_PROTOCOL = "source-diff-smoke-review-v0.1"
 GENERATED_LABEL_REVIEW_PROTOCOL = "generated-label-smoke-review-v0.1"
 
 
+def source_jsonl_path(artifact_name: str) -> Path:
+    """Return the source-diff JSONL path for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
+    return Path("artifacts") / artifact_name / f"source-diffs.{artifact_name}.jsonl"
+
+
+def source_report_path(artifact_name: str) -> Path:
+    """Return the source-diff report path for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
+    return Path("artifacts") / artifact_name / f"source-diffs.{artifact_name}.report.json"
+
+
 def normalize_smoke_report(data_dir: str | Path) -> dict[str, Any]:
     """Normalize machine-local paths in the smoke report."""
 
+    return normalize_source_report(data_dir, artifact_name="smoke")
+
+
+def normalize_source_report(data_dir: str | Path, *, artifact_name: str) -> dict[str, Any]:
+    """Normalize machine-local paths in a named source-diff report."""
+
     data_dir = Path(data_dir)
-    report_path = data_dir / SMOKE_REPORT
+    jsonl_path = source_jsonl_path(artifact_name)
+    report_path = data_dir / source_report_path(artifact_name)
     report = json.loads(report_path.read_text(encoding="utf-8"))
     report["data_dir"] = "$GITCTX_DATA_DIR"
     report["manifest_path"] = str(SMOKE_MANIFEST)
-    report["output_path"] = str(SMOKE_JSONL)
+    report["output_path"] = str(jsonl_path)
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return report
 
@@ -46,8 +67,14 @@ def normalize_smoke_report(data_dir: str | Path) -> dict[str, Any]:
 def validate_smoke_artifact(data_dir: str | Path) -> dict[str, int]:
     """Validate source-diff smoke records and their manifest."""
 
+    return validate_source_artifact(data_dir, artifact_name="smoke")
+
+
+def validate_source_artifact(data_dir: str | Path, *, artifact_name: str) -> dict[str, int]:
+    """Validate named source-diff records and their manifest."""
+
     data_dir = Path(data_dir)
-    source_records = load_jsonl(data_dir / SMOKE_JSONL)
+    source_records = load_jsonl(data_dir / source_jsonl_path(artifact_name))
     manifest_records = load_jsonl(data_dir / SMOKE_MANIFEST)
 
     source_errors = [
@@ -67,6 +94,7 @@ def validate_smoke_artifact(data_dir: str | Path) -> dict[str, int]:
         raise SystemExit(1)
 
     summary = {
+        "artifact_name": artifact_name,
         "source_records": len(source_records),
         "manifest_records": len(manifest_records),
         "source_errors": 0,
@@ -286,15 +314,13 @@ def write_checksums(data_dir: str | Path) -> Path:
     data_dir = Path(data_dir)
     checksum_path = data_dir / CHECKSUMS
     checksum_path.parent.mkdir(parents=True, exist_ok=True)
-    paths = [SMOKE_JSONL, SMOKE_REPORT, SMOKE_MANIFEST, GITCTX_COMMIT]
+    paths = [SMOKE_MANIFEST, GITCTX_COMMIT]
+    artifacts_dir = data_dir / "artifacts"
+    if artifacts_dir.exists():
+        for artifact_path in sorted(artifacts_dir.glob("*/*.json*")):
+            paths.append(artifact_path.relative_to(data_dir))
     if (data_dir / SMOKE_REVIEW).exists():
         paths.append(SMOKE_REVIEW)
-    if (data_dir / SMOKE_TEACHER_INPUTS).exists():
-        paths.append(SMOKE_TEACHER_INPUTS)
-    if (data_dir / SMOKE_GENERATED_LABELS).exists():
-        paths.append(SMOKE_GENERATED_LABELS)
-    if (data_dir / SMOKE_GENERATED_REPORT).exists():
-        paths.append(SMOKE_GENERATED_REPORT)
     if (data_dir / SMOKE_GENERATED_REVIEW).exists():
         paths.append(SMOKE_GENERATED_REVIEW)
     lines = []
@@ -313,12 +339,21 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _validate_artifact_name(artifact_name: str) -> None:
+    if not artifact_name.replace("-", "").replace("_", "").isalnum():
+        raise ValueError("artifact_name must be a stable alphanumeric identifier")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Manage private gitctx-data artifacts.")
     parser.add_argument("--data-dir", type=Path, required=True)
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("normalize-smoke")
     subparsers.add_parser("validate-smoke")
+    normalize_source = subparsers.add_parser("normalize-source")
+    normalize_source.add_argument("--artifact-name", required=True)
+    validate_source = subparsers.add_parser("validate-source")
+    validate_source.add_argument("--artifact-name", required=True)
     review_template = subparsers.add_parser("create-smoke-review-template")
     review_template.add_argument("--reviewer", required=True)
     review_template.add_argument("--overwrite", action="store_true")
@@ -334,6 +369,10 @@ def main(argv: list[str] | None = None) -> int:
         normalize_smoke_report(args.data_dir)
     elif args.command == "validate-smoke":
         validate_smoke_artifact(args.data_dir)
+    elif args.command == "normalize-source":
+        normalize_source_report(args.data_dir, artifact_name=args.artifact_name)
+    elif args.command == "validate-source":
+        validate_source_artifact(args.data_dir, artifact_name=args.artifact_name)
     elif args.command == "create-smoke-review-template":
         print(
             create_smoke_review_template(

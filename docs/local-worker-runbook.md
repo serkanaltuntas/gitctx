@@ -105,6 +105,28 @@ git status --short --ignored
 git diff -- artifacts/smoke/source-diffs.smoke.report.json checksums/sha256.txt
 ```
 
+## Pilot Source Extraction
+
+After the smoke path passes, collect a larger source-diff pilot artifact without
+overwriting smoke files:
+
+```bash
+make pilot-source GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" PILOT_RECORDS=250 PILOT_PER_REPO_LIMIT=100
+make pilot-source-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+make pilot-source-finalize GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+```
+
+This writes:
+
+```text
+artifacts/pilot/source-diffs.pilot.jsonl
+artifacts/pilot/source-diffs.pilot.report.json
+```
+
+The pilot source artifact contains source-diff metadata only. It does not
+generate teacher inputs or model labels. Review and labeling targets for pilot
+data must be added separately before teacher generation starts.
+
 ## Prepare Smoke Review Decisions
 
 After the smoke artifact is committed to the private data repository, create a

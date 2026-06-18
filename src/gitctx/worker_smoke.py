@@ -1,4 +1,4 @@
-"""Local worker smoke extraction for approved source manifests."""
+"""Local worker source-diff extraction for approved source manifests."""
 
 from __future__ import annotations
 
@@ -27,14 +27,37 @@ def run_smoke(
 ) -> dict[str, Any]:
     """Clone approved sources and emit a source-diff smoke artifact."""
 
+    return run_source_extract(
+        manifest_path,
+        data_dir,
+        artifact_name="smoke",
+        records=records,
+        per_repo_limit=per_repo_limit,
+        split=split,
+    )
+
+
+def run_source_extract(
+    manifest_path: str | Path,
+    data_dir: str | Path,
+    *,
+    artifact_name: str,
+    records: int,
+    per_repo_limit: int,
+    split: str = "DEV",
+) -> dict[str, Any]:
+    """Clone approved sources and emit a named source-diff artifact."""
+
     manifest_path = Path(manifest_path)
     data_dir = Path(data_dir)
+    if not artifact_name.replace("-", "").replace("_", "").isalnum():
+        raise ValueError("artifact_name must be a stable alphanumeric identifier")
     sources_dir = data_dir / "sources" / "github.com"
-    artifact_dir = data_dir / "artifacts" / "smoke"
+    artifact_dir = data_dir / "artifacts" / artifact_name
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
-    output_path = artifact_dir / "source-diffs.smoke.jsonl"
-    report_path = artifact_dir / "source-diffs.smoke.report.json"
+    output_path = artifact_dir / f"source-diffs.{artifact_name}.jsonl"
+    report_path = artifact_dir / f"source-diffs.{artifact_name}.report.json"
 
     manifest_entries = load_jsonl(manifest_path)
     output_records: list[dict[str, Any]] = []
@@ -91,6 +114,7 @@ def run_smoke(
         "requested_records": records,
         "written_records": len(output_records),
         "split": split,
+        "artifact_name": artifact_name,
         "repo_reports": repo_reports,
         "duration_seconds": round(time.time() - started, 3),
     }
@@ -151,11 +175,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--records", type=int, default=50)
     parser.add_argument("--per-repo-limit", type=int, default=20)
     parser.add_argument("--split", default="DEV")
+    parser.add_argument("--artifact-name", default="smoke")
     args = parser.parse_args(argv)
 
-    report = run_smoke(
+    report = run_source_extract(
         args.manifest,
         args.data_dir,
+        artifact_name=args.artifact_name,
         records=args.records,
         per_repo_limit=args.per_repo_limit,
         split=args.split,
