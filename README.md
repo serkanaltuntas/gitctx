@@ -79,10 +79,16 @@ make smoke-review-template REVIEWER="reviewer@example.com"
 make smoke-review-check
 make teacher-inputs
 make teacher-input-check
+make pilot-teacher-inputs
+make pilot-teacher-input-check
 make teacher-generate
 make teacher-generate-check
+make pilot-teacher-generate
+make pilot-teacher-generate-check
 make generated-review-template REVIEWER="reviewer@example.com"
 make generated-review-check
+make pilot-generated-review-template REVIEWER="reviewer@example.com"
+make pilot-generated-review-check
 ```
 
 See:

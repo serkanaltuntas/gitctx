@@ -51,6 +51,20 @@ def source_review_path(artifact_name: str) -> Path:
     return Path("reviews") / f"source-diffs.{artifact_name}.review.jsonl"
 
 
+def generated_labels_path(artifact_name: str) -> Path:
+    """Return the generated-label JSONL path for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
+    return Path("artifacts/teacher") / f"generated-labels.{artifact_name}.jsonl"
+
+
+def generated_label_review_path(artifact_name: str) -> Path:
+    """Return the generated-label review path for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
+    return Path("reviews") / f"generated-labels.{artifact_name}.review.jsonl"
+
+
 def normalize_smoke_report(data_dir: str | Path) -> dict[str, Any]:
     """Normalize machine-local paths in the smoke report."""
 
@@ -244,12 +258,29 @@ def create_generated_label_review_template(
 ) -> Path:
     """Create a human-review JSONL template for generated smoke labels."""
 
+    return create_named_generated_label_review_template(
+        data_dir,
+        artifact_name="smoke",
+        reviewer=reviewer,
+        overwrite=overwrite,
+    )
+
+
+def create_named_generated_label_review_template(
+    data_dir: str | Path,
+    *,
+    artifact_name: str,
+    reviewer: str,
+    overwrite: bool = False,
+) -> Path:
+    """Create a human-review JSONL template for generated labels in a named artifact."""
+
     data_dir = Path(data_dir)
-    output_path = data_dir / SMOKE_GENERATED_REVIEW
+    output_path = data_dir / generated_label_review_path(artifact_name)
     if output_path.exists() and not overwrite:
         raise SystemExit(f"{output_path} already exists; pass --overwrite to replace it")
 
-    generated_labels = load_jsonl(data_dir / SMOKE_GENERATED_LABELS)
+    generated_labels = load_jsonl(data_dir / generated_labels_path(artifact_name))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     for label in generated_labels:
@@ -269,7 +300,7 @@ def create_generated_label_review_template(
             "notes": "",
             "reviewer": reviewer,
             "review_timestamp": "TBD",
-            "review_protocol": GENERATED_LABEL_REVIEW_PROTOCOL,
+            "review_protocol": f"generated-label-{artifact_name}-review-v0.1",
         }
         lines.append(json.dumps(decision, sort_keys=True))
 
@@ -280,9 +311,19 @@ def create_generated_label_review_template(
 def validate_generated_label_review(data_dir: str | Path) -> dict[str, int]:
     """Validate generated-label human-review decisions."""
 
+    return validate_named_generated_label_review(data_dir, artifact_name="smoke")
+
+
+def validate_named_generated_label_review(
+    data_dir: str | Path,
+    *,
+    artifact_name: str,
+) -> dict[str, int]:
+    """Validate generated-label human-review decisions for a named artifact."""
+
     data_dir = Path(data_dir)
-    generated_labels = load_jsonl(data_dir / SMOKE_GENERATED_LABELS)
-    review_records = load_jsonl(data_dir / SMOKE_GENERATED_REVIEW)
+    generated_labels = load_jsonl(data_dir / generated_labels_path(artifact_name))
+    review_records = load_jsonl(data_dir / generated_label_review_path(artifact_name))
     labels_by_id = {record["id"]: record for record in generated_labels}
     review_ids: set[str] = set()
     failures: list[tuple[str, tuple[str, ...]]] = []
@@ -330,6 +371,7 @@ def validate_generated_label_review(data_dir: str | Path) -> dict[str, int]:
         raise SystemExit(1)
 
     summary = {
+        "artifact_name": artifact_name,
         "generated_label_records": len(generated_labels),
         "review_records": len(review_records),
         **decision_counts,
@@ -399,6 +441,14 @@ def main(argv: list[str] | None = None) -> int:
     generated_review_template.add_argument("--reviewer", required=True)
     generated_review_template.add_argument("--overwrite", action="store_true")
     subparsers.add_parser("validate-generated-label-review")
+    named_generated_review_template = subparsers.add_parser(
+        "create-named-generated-label-review-template"
+    )
+    named_generated_review_template.add_argument("--artifact-name", required=True)
+    named_generated_review_template.add_argument("--reviewer", required=True)
+    named_generated_review_template.add_argument("--overwrite", action="store_true")
+    named_generated_review_check = subparsers.add_parser("validate-named-generated-label-review")
+    named_generated_review_check.add_argument("--artifact-name", required=True)
     subparsers.add_parser("write-checksums")
     args = parser.parse_args(argv)
 
@@ -441,6 +491,17 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "validate-generated-label-review":
         validate_generated_label_review(args.data_dir)
+    elif args.command == "create-named-generated-label-review-template":
+        print(
+            create_named_generated_label_review_template(
+                args.data_dir,
+                artifact_name=args.artifact_name,
+                reviewer=args.reviewer,
+                overwrite=args.overwrite,
+            )
+        )
+    elif args.command == "validate-named-generated-label-review":
+        validate_named_generated_label_review(args.data_dir, artifact_name=args.artifact_name)
     elif args.command == "write-checksums":
         print(write_checksums(args.data_dir))
     return 0

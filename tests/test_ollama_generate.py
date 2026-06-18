@@ -5,7 +5,12 @@ from pathlib import Path
 from threading import Thread
 import unittest
 
-from gitctx.ollama_generate import generate_smoke_labels, validate_smoke_generated_labels
+from gitctx.ollama_generate import (
+    generate_labels,
+    generate_smoke_labels,
+    validate_generated_labels,
+    validate_smoke_generated_labels,
+)
 
 
 class OllamaGenerateTests(unittest.TestCase):
@@ -42,6 +47,31 @@ class OllamaGenerateTests(unittest.TestCase):
             self.assertEqual(server.seen_payload["options"]["num_ctx"], 4096)  # type: ignore[attr-defined]
             self.assertEqual(server.seen_payload["options"]["num_predict"], 256)  # type: ignore[attr-defined]
 
+    def test_generates_and_validates_named_label_with_fake_ollama(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root, artifact_name="pilot")
+            server, thread = self._start_fake_ollama()
+            try:
+                report = generate_labels(
+                    root,
+                    artifact_name="pilot",
+                    ollama_url=f"http://127.0.0.1:{server.server_port}",
+                    resume=False,
+                )
+                summary = validate_generated_labels(root, artifact_name="pilot")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+            self.assertEqual(report["artifact_name"], "pilot")
+            self.assertEqual(summary["artifact_name"], "pilot")
+            label_path = root / "artifacts/teacher/generated-labels.pilot.jsonl"
+            self.assertTrue(label_path.exists())
+            label = json.loads(label_path.read_text(encoding="utf-8"))
+            self.assertEqual(label["header"], "fix(parser): handle empty values")
+
     def test_scope_only_parser_error_does_not_lower_verifier_score(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -69,7 +99,7 @@ class OllamaGenerateTests(unittest.TestCase):
             self.assertIn("scope 'parser_module' is not visible", label["parser_result"]["errors"][0])
             self.assertEqual(label["verifier_score"], 1.0)
 
-    def _write_teacher_inputs(self, root: Path) -> None:
+    def _write_teacher_inputs(self, root: Path, *, artifact_name: str = "smoke") -> None:
         (root / "artifacts/teacher").mkdir(parents=True)
         record = {
             "id": "teacher-input-example-repo-111111111111",
@@ -99,7 +129,7 @@ class OllamaGenerateTests(unittest.TestCase):
             "diff_sha256": "0" * 64,
             "input_status": "ready_for_generation",
         }
-        (root / "artifacts/teacher/teacher-inputs.smoke.jsonl").write_text(
+        (root / f"artifacts/teacher/teacher-inputs.{artifact_name}.jsonl").write_text(
             json.dumps(record) + "\n",
             encoding="utf-8",
         )

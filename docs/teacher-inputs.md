@@ -9,6 +9,15 @@ The first smoke artifact is:
 artifacts/teacher/teacher-inputs.smoke.jsonl
 ```
 
+Named artifacts use the same layout:
+
+```text
+artifacts/teacher/teacher-inputs.<artifact>.jsonl
+artifacts/teacher/generated-labels.<artifact>.jsonl
+artifacts/teacher/generated-labels.<artifact>.report.json
+reviews/generated-labels.<artifact>.review.jsonl
+```
+
 It is generated only from source-diff records whose review decision is
 `accepted_for_teacher_labeling`.
 
@@ -33,6 +42,13 @@ Create the smoke teacher inputs:
 make teacher-inputs
 ```
 
+Create the pilot teacher inputs after the pilot source-diff review is complete:
+
+```bash
+make pilot-teacher-inputs
+make pilot-teacher-input-check
+```
+
 By default, smoke teacher inputs target the local Ollama teacher approved in
 `docs/teacher-decisions/ollama-qwen2.5-coder-7b-smoke.md`:
 
@@ -55,6 +71,13 @@ make teacher-generate
 make teacher-generate-check
 ```
 
+Generate pilot labels with local Ollama:
+
+```bash
+make pilot-teacher-generate
+make pilot-teacher-generate-check
+```
+
 Generation sends one teacher input record per Ollama call. Do not batch many
 diffs into one prompt; per-record calls keep provenance, validation, retries,
 and resume behavior clean.
@@ -64,6 +87,13 @@ Prepare generated-label human review:
 ```bash
 make generated-review-template REVIEWER="reviewer@example.com"
 make generated-review-check
+```
+
+Prepare pilot generated-label human review:
+
+```bash
+make pilot-generated-review-template REVIEWER="reviewer@example.com"
+make pilot-generated-review-check
 ```
 
 The review artifact is private:

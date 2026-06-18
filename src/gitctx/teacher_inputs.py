@@ -49,11 +49,29 @@ def create_smoke_teacher_inputs(
 ) -> Path:
     """Write teacher input prompts for accepted smoke source diffs."""
 
+    return create_teacher_inputs(
+        data_dir,
+        artifact_name="smoke",
+        prompt_path=prompt_path,
+        teacher_config=teacher_config,
+    )
+
+
+def create_teacher_inputs(
+    data_dir: str | Path,
+    *,
+    artifact_name: str,
+    prompt_path: str | Path = PROMPT_PATH,
+    teacher_config: TeacherConfig | None = None,
+) -> Path:
+    """Write teacher input prompts for accepted source diffs in a named artifact."""
+
+    _validate_artifact_name(artifact_name)
     data_dir = Path(data_dir)
     teacher_config = teacher_config or default_teacher_config()
     prompt = _load_prompt_template(prompt_path)
-    source_records = load_jsonl(data_dir / SMOKE_SOURCE_DIFFS)
-    review_records = load_jsonl(data_dir / SMOKE_REVIEW)
+    source_records = load_jsonl(data_dir / source_diffs_path(artifact_name))
+    review_records = load_jsonl(data_dir / source_review_path(artifact_name))
     source_by_id = {record["id"]: record for record in source_records}
     accepted_reviews = [
         record
@@ -107,7 +125,7 @@ def create_smoke_teacher_inputs(
             }
         )
 
-    output_path = data_dir / SMOKE_TEACHER_INPUTS
+    output_path = data_dir / teacher_inputs_path(artifact_name)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         "\n".join(json.dumps(record, sort_keys=True) for record in output_records) + "\n",
@@ -133,10 +151,17 @@ def default_teacher_config() -> TeacherConfig:
 def validate_smoke_teacher_inputs(data_dir: str | Path) -> dict[str, int]:
     """Validate smoke teacher input records."""
 
+    return validate_teacher_inputs(data_dir, artifact_name="smoke")
+
+
+def validate_teacher_inputs(data_dir: str | Path, *, artifact_name: str) -> dict[str, int]:
+    """Validate teacher input records for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
     data_dir = Path(data_dir)
-    source_records = load_jsonl(data_dir / SMOKE_SOURCE_DIFFS)
-    review_records = load_jsonl(data_dir / SMOKE_REVIEW)
-    input_records = load_jsonl(data_dir / SMOKE_TEACHER_INPUTS)
+    source_records = load_jsonl(data_dir / source_diffs_path(artifact_name))
+    review_records = load_jsonl(data_dir / source_review_path(artifact_name))
+    input_records = load_jsonl(data_dir / teacher_inputs_path(artifact_name))
     source_by_id = {record["id"]: record for record in source_records}
     accepted_source_ids = {
         record["source_diff_id"]
@@ -191,6 +216,7 @@ def validate_smoke_teacher_inputs(data_dir: str | Path) -> dict[str, int]:
         raise SystemExit(1)
 
     summary = {
+        "artifact_name": artifact_name,
         "source_records": len(source_records),
         "accepted_review_records": len(accepted_source_ids),
         "teacher_input_records": len(input_records),
@@ -198,6 +224,27 @@ def validate_smoke_teacher_inputs(data_dir: str | Path) -> dict[str, int]:
     for key, value in summary.items():
         print(key, value)
     return summary
+
+
+def source_diffs_path(artifact_name: str) -> Path:
+    """Return the source-diff JSONL path for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
+    return Path("artifacts") / artifact_name / f"source-diffs.{artifact_name}.jsonl"
+
+
+def source_review_path(artifact_name: str) -> Path:
+    """Return the source-diff review JSONL path for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
+    return Path("reviews") / f"source-diffs.{artifact_name}.review.jsonl"
+
+
+def teacher_inputs_path(artifact_name: str) -> Path:
+    """Return the teacher-input JSONL path for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
+    return Path("artifacts/teacher") / f"teacher-inputs.{artifact_name}.jsonl"
 
 
 def _load_prompt_template(path: str | Path) -> dict[str, str]:
@@ -256,6 +303,11 @@ def _default_branch(repo_url: str) -> str:
     return "main"
 
 
+def _validate_artifact_name(artifact_name: str) -> None:
+    if not artifact_name.replace("-", "").replace("_", "").isalnum():
+        raise ValueError("artifact_name must be a stable alphanumeric identifier")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Create teacher input artifacts.")
     parser.add_argument("--data-dir", type=Path, required=True)
@@ -270,6 +322,10 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("create-smoke")
     subparsers.add_parser("validate-smoke")
+    create = subparsers.add_parser("create")
+    create.add_argument("--artifact-name", required=True)
+    validate = subparsers.add_parser("validate")
+    validate.add_argument("--artifact-name", required=True)
     args = parser.parse_args(argv)
 
     if args.command == "create-smoke":
@@ -290,6 +346,25 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "validate-smoke":
         validate_smoke_teacher_inputs(args.data_dir)
+    elif args.command == "create":
+        print(
+            create_teacher_inputs(
+                args.data_dir,
+                artifact_name=args.artifact_name,
+                prompt_path=args.prompt_path,
+                teacher_config=TeacherConfig(
+                    model_id=args.teacher_model_id,
+                    runtime=args.teacher_runtime,
+                    runtime_model_id=args.teacher_runtime_model_id,
+                    revision=args.teacher_revision,
+                    license=args.teacher_license,
+                    size=args.teacher_size,
+                    context_length=args.teacher_context_length,
+                ),
+            )
+        )
+    elif args.command == "validate":
+        validate_teacher_inputs(args.data_dir, artifact_name=args.artifact_name)
     return 0
 
 

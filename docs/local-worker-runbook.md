@@ -182,6 +182,16 @@ This writes `artifacts/teacher/teacher-inputs.smoke.jsonl` in the private data
 repository. It includes full diff text and must remain private until a later
 data-card and redistribution review approves any public release shape.
 
+For the reviewed pilot artifact, use the pilot-specific targets:
+
+```bash
+make pilot-teacher-inputs GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+make pilot-teacher-input-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+```
+
+This writes `artifacts/teacher/teacher-inputs.pilot.jsonl` and validates that it
+contains one input for every accepted pilot source-diff review.
+
 The default smoke teacher identity is the local Ollama model
 `ollama/qwen2.5-coder:7b` with tag id `dae161e27b0e`. If the worker uses a
 different local tag, override the teacher metadata when creating inputs and add
@@ -204,6 +214,20 @@ artifacts/teacher/generated-labels.smoke.jsonl
 artifacts/teacher/generated-labels.smoke.report.json
 ```
 
+For pilot labels, run:
+
+```bash
+make pilot-teacher-generate GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+make pilot-teacher-generate-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+```
+
+This writes:
+
+```text
+artifacts/teacher/generated-labels.pilot.jsonl
+artifacts/teacher/generated-labels.pilot.report.json
+```
+
 If the worker stops, rerun `make teacher-generate`; it resumes by skipping
 existing generated-label ids.
 
@@ -220,6 +244,19 @@ This writes:
 
 ```text
 reviews/generated-labels.smoke.review.jsonl
+```
+
+For pilot labels:
+
+```bash
+make pilot-generated-review-template GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" REVIEWER="reviewer@example.com"
+make pilot-generated-review-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
+```
+
+This writes:
+
+```text
+reviews/generated-labels.pilot.review.jsonl
 ```
 
 Review decisions start as `needs_review`. Use `accept`, `edit`, or `reject`

@@ -16,7 +16,7 @@ from gitctx.provenance import (
     load_jsonl,
     validate_generated_label_matches_input,
 )
-from gitctx.teacher_inputs import SMOKE_TEACHER_INPUTS
+from gitctx.teacher_inputs import teacher_inputs_path
 
 SMOKE_GENERATED_LABELS = Path("artifacts/teacher/generated-labels.smoke.jsonl")
 SMOKE_GENERATED_REPORT = Path("artifacts/teacher/generated-labels.smoke.report.json")
@@ -34,10 +34,38 @@ def generate_smoke_labels(
 ) -> dict[str, Any]:
     """Generate labels for smoke teacher inputs and write JSONL plus report."""
 
+    return generate_labels(
+        data_dir,
+        artifact_name="smoke",
+        ollama_url=ollama_url,
+        limit=limit,
+        ollama_options=ollama_options,
+        request_timeout=request_timeout,
+        resume=resume,
+        think=think,
+    )
+
+
+def generate_labels(
+    data_dir: str | Path,
+    *,
+    artifact_name: str,
+    ollama_url: str = "http://127.0.0.1:11434",
+    limit: int | None = None,
+    ollama_options: dict[str, Any] | None = None,
+    request_timeout: int = 600,
+    resume: bool = True,
+    think: bool = False,
+) -> dict[str, Any]:
+    """Generate labels for a named teacher-input artifact and write JSONL plus report."""
+
+    _validate_artifact_name(artifact_name)
     data_dir = Path(data_dir)
-    input_path = data_dir / SMOKE_TEACHER_INPUTS
-    output_path = data_dir / SMOKE_GENERATED_LABELS
-    report_path = data_dir / SMOKE_GENERATED_REPORT
+    output_relative_path = generated_labels_path(artifact_name)
+    report_relative_path = generated_report_path(artifact_name)
+    input_path = data_dir / teacher_inputs_path(artifact_name)
+    output_path = data_dir / output_relative_path
+    report_path = data_dir / report_relative_path
     teacher_inputs = load_jsonl(input_path)
     if limit is not None:
         teacher_inputs = teacher_inputs[:limit]
@@ -80,9 +108,10 @@ def generate_smoke_labels(
                 )
 
     report = {
+        "artifact_name": artifact_name,
         "generated_records": generated,
         "input_records": len(teacher_inputs),
-        "output_path": str(SMOKE_GENERATED_LABELS),
+        "output_path": str(output_relative_path),
         "failed_records": len(failures),
         "failures": failures,
         "skipped_existing_records": skipped,
@@ -103,9 +132,16 @@ def generate_smoke_labels(
 def validate_smoke_generated_labels(data_dir: str | Path) -> dict[str, int]:
     """Validate generated-label smoke artifacts against teacher inputs."""
 
+    return validate_generated_labels(data_dir, artifact_name="smoke")
+
+
+def validate_generated_labels(data_dir: str | Path, *, artifact_name: str) -> dict[str, int]:
+    """Validate generated-label artifacts against named teacher inputs."""
+
+    _validate_artifact_name(artifact_name)
     data_dir = Path(data_dir)
-    teacher_inputs = load_jsonl(data_dir / SMOKE_TEACHER_INPUTS)
-    generated_labels = load_jsonl(data_dir / SMOKE_GENERATED_LABELS)
+    teacher_inputs = load_jsonl(data_dir / teacher_inputs_path(artifact_name))
+    generated_labels = load_jsonl(data_dir / generated_labels_path(artifact_name))
     inputs_by_source_id = {record["source_diff_id"]: record for record in teacher_inputs}
     seen_source_ids: set[str] = set()
     failures: list[tuple[str, tuple[str, ...]]] = []
@@ -135,12 +171,27 @@ def validate_smoke_generated_labels(data_dir: str | Path) -> dict[str, int]:
         raise SystemExit(1)
 
     summary = {
+        "artifact_name": artifact_name,
         "teacher_input_records": len(teacher_inputs),
         "generated_label_records": len(generated_labels),
     }
     for key, value in summary.items():
         print(key, value)
     return summary
+
+
+def generated_labels_path(artifact_name: str) -> Path:
+    """Return the generated-label JSONL path for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
+    return Path("artifacts/teacher") / f"generated-labels.{artifact_name}.jsonl"
+
+
+def generated_report_path(artifact_name: str) -> Path:
+    """Return the generated-label report path for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
+    return Path("artifacts/teacher") / f"generated-labels.{artifact_name}.report.json"
 
 
 def _load_existing(path: Path) -> list[dict[str, Any]]:
@@ -320,6 +371,11 @@ def _verifier_score(
     return sum(1 for check in checks if check) / len(checks)
 
 
+def _validate_artifact_name(artifact_name: str) -> None:
+    if not artifact_name.replace("-", "").replace("_", "").isalnum():
+        raise ValueError("artifact_name must be a stable alphanumeric identifier")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate gitctx labels through Ollama.")
     parser.add_argument("--data-dir", type=Path, required=True)
@@ -333,6 +389,16 @@ def main(argv: list[str] | None = None) -> int:
     generate.add_argument("--request-timeout", type=int, default=600)
     generate.add_argument("--think", action="store_true")
     subparsers.add_parser("validate-smoke")
+    generate_named = subparsers.add_parser("generate")
+    generate_named.add_argument("--artifact-name", required=True)
+    generate_named.add_argument("--limit", type=int)
+    generate_named.add_argument("--no-resume", action="store_true")
+    generate_named.add_argument("--num-ctx", type=int)
+    generate_named.add_argument("--num-predict", type=int)
+    generate_named.add_argument("--request-timeout", type=int, default=600)
+    generate_named.add_argument("--think", action="store_true")
+    validate_named = subparsers.add_parser("validate")
+    validate_named.add_argument("--artifact-name", required=True)
     args = parser.parse_args(argv)
 
     if args.command == "generate-smoke":
@@ -347,6 +413,19 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "validate-smoke":
         validate_smoke_generated_labels(args.data_dir)
+    elif args.command == "generate":
+        generate_labels(
+            args.data_dir,
+            artifact_name=args.artifact_name,
+            ollama_url=args.ollama_url,
+            limit=args.limit,
+            ollama_options={"num_ctx": args.num_ctx, "num_predict": args.num_predict},
+            request_timeout=args.request_timeout,
+            resume=not args.no_resume,
+            think=args.think,
+        )
+    elif args.command == "validate":
+        validate_generated_labels(args.data_dir, artifact_name=args.artifact_name)
     return 0
 
 
