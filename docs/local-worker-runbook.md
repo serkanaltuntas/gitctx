@@ -144,7 +144,7 @@ repository. It includes full diff text and must remain private until a later
 data-card and redistribution review approves any public release shape.
 
 The default smoke teacher identity is the local Ollama model
-`ollama/deepseek-r1:latest` with tag id `6995872bfe4c`. If the worker uses a
+`ollama/qwen2.5-coder:7b` with tag id `dae161e27b0e`. If the worker uses a
 different local tag, override the teacher metadata when creating inputs and add
 or update the matching teacher decision before keeping outputs.
 

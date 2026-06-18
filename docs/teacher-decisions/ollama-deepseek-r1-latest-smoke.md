@@ -1,18 +1,30 @@
 # Teacher Decision: Ollama DeepSeek-R1 Latest Smoke
 
-Status: approved for smoke audit only.
+Status: replaced after smoke generation.
 Review date: 2026-06-18.
 Review type: engineering license review, not legal advice.
 
 ## Decision
 
 Use the local Ollama model `deepseek-r1:latest` for the first 17-record smoke
-teacher run.
+teacher run. This decision has been superseded by
+[`ollama-qwen2.5-coder-7b-smoke.md`](ollama-qwen2.5-coder-7b-smoke.md) after
+the R1 smoke run showed unreliable JSON/schema behavior.
 
-This is a low-cost local smoke teacher, not a final training-data approval. The
+This was a low-cost local smoke teacher, not a final training-data approval. The
 goal is to test prompt shape, JSON validity, deterministic verifiers,
 provenance capture, and human-review workflow before spending time on larger
 teacher models.
+
+## Smoke Result
+
+The first generation smoke produced 5 generated records and 12 failed records
+from 17 inputs. Failure modes included missing JSON, malformed output shape,
+hallucinated evidence paths, and invalid Conventional Commit headers.
+
+Do not use this teacher as the primary smoke or pilot generator. It remains
+available only as a possible reviewer/fallback candidate after a separate
+decision.
 
 ## Model Record
 

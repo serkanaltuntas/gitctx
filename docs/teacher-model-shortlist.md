@@ -27,8 +27,11 @@ Start with a small audit using a teacher whose license explicitly permits
 distillation. Do not run large-scale generation until prompts, verifier filters,
 and provenance records have passed the 1K-5K audit sample.
 
-The first local smoke decision is recorded in
-[`teacher-decisions/ollama-deepseek-r1-latest-smoke.md`](teacher-decisions/ollama-deepseek-r1-latest-smoke.md).
+The first successful local smoke decision is recorded in
+[`teacher-decisions/ollama-qwen2.5-coder-7b-smoke.md`](teacher-decisions/ollama-qwen2.5-coder-7b-smoke.md).
+The replaced DeepSeek-R1 smoke attempt is retained in
+[`teacher-decisions/ollama-deepseek-r1-latest-smoke.md`](teacher-decisions/ollama-deepseek-r1-latest-smoke.md)
+for audit history.
 The larger DeepSeek-R1-0528 audit decision remains available as a higher-cost
 quality anchor in
 [`teacher-decisions/deepseek-r1-0528-audit.md`](teacher-decisions/deepseek-r1-0528-audit.md).
@@ -37,7 +40,8 @@ quality anchor in
 
 | Candidate | License signal | Output/distillation decision | Status |
 |---|---|---|---|
-| `ollama/deepseek-r1:latest` | MIT license signal; local Ollama model tag `6995872bfe4c` | Approved for the 17-record local smoke audit only | First smoke teacher |
+| `ollama/qwen2.5-coder:7b` | Apache-2.0 license signal; local Ollama model tag `dae161e27b0e` | Approved for the 17-record smoke and next bounded pilot audit only | Current smoke teacher |
+| `ollama/deepseek-r1:latest` | MIT license signal; local Ollama model tag `6995872bfe4c` | Replaced after the first smoke generation failed JSON/schema reliability | Reviewer or fallback candidate only |
 | `deepseek-ai/DeepSeek-R1-0528` | MIT license; model card says DeepSeek-R1 series supports commercial use and distillation | Approved for local audit after recording exact artifact hash and prompt version | Preferred first teacher candidate |
 | `deepseek-ai/DeepSeek-R1` | MIT license; model card says derivative work including distillation is allowed | Approved for local audit if `0528` is unavailable or too costly | Backup first teacher candidate |
 | `Qwen/Qwen2.5-Coder-32B-Instruct` | Apache-2.0 model license | Candidate, but record an explicit output-use decision before labels are kept | Strong code teacher candidate |
@@ -50,6 +54,9 @@ quality anchor in
 
 - DeepSeek-R1-0528: <https://huggingface.co/deepseek-ai/DeepSeek-R1-0528>
 - DeepSeek-R1: <https://huggingface.co/deepseek-ai/DeepSeek-R1>
+- Ollama Qwen2.5-Coder: <https://ollama.com/library/qwen2.5-coder>
+- Qwen2.5-Coder-7B-Instruct: <https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct>
+- Qwen2.5-Coder-7B-Instruct license: <https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct/blob/main/LICENSE>
 - Qwen2.5-Coder-32B-Instruct: <https://huggingface.co/Qwen/Qwen2.5-Coder-32B-Instruct>
 - Qwen2.5-Coder-32B-Instruct license: <https://huggingface.co/Qwen/Qwen2.5-Coder-32B-Instruct/blob/main/LICENSE>
 - Granite 20B Code Instruct: <https://huggingface.co/ibm-granite/granite-20b-code-instruct-8k>
@@ -58,9 +65,10 @@ quality anchor in
 
 ## First Audit Recommendation
 
-Use `ollama/deepseek-r1:latest` for the first 17-record local smoke run. Use
-`deepseek-ai/DeepSeek-R1-0528` as the larger quality anchor if the local smoke
-teacher fails JSON validity, factuality, or human-review quality.
+Use `ollama/qwen2.5-coder:7b` for the first successful local smoke run and the
+next 250-500 record pilot. Use `deepseek-ai/DeepSeek-R1-0528` as the larger
+quality anchor if the local Qwen teacher fails factuality or human-review
+quality after prompt tuning.
 
 Audit target:
 

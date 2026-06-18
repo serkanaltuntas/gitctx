@@ -73,7 +73,7 @@ class TeacherInputTests(unittest.TestCase):
             self.assertIn("Generate one Conventional Commit message", record["user_message"])
             self.assertIn("diff --git", record["diff"])
             self.assertEqual(record["input_status"], "ready_for_generation")
-            self.assertEqual(record["teacher_model_id"], "ollama/deepseek-r1:latest")
+            self.assertEqual(record["teacher_model_id"], "ollama/qwen2.5-coder:7b")
             self.assertEqual(record["teacher_runtime"], "ollama")
 
     def _run(self, args: list[str], *, cwd: Path) -> str:

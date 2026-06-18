@@ -34,12 +34,12 @@ make teacher-inputs
 ```
 
 By default, smoke teacher inputs target the local Ollama teacher approved in
-`docs/teacher-decisions/ollama-deepseek-r1-latest-smoke.md`:
+`docs/teacher-decisions/ollama-qwen2.5-coder-7b-smoke.md`:
 
 ```text
-teacher_model_id: ollama/deepseek-r1:latest
+teacher_model_id: ollama/qwen2.5-coder:7b
 teacher_runtime: ollama
-teacher_revision: 6995872bfe4c
+teacher_revision: dae161e27b0e
 ```
 
 Validate and refresh checksums:

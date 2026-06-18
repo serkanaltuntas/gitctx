@@ -11,13 +11,13 @@ from typing import Any, NamedTuple
 
 from gitctx.provenance import load_jsonl, validate_teacher_input_record
 
-DEFAULT_TEACHER_MODEL_ID = "ollama/deepseek-r1:latest"
+DEFAULT_TEACHER_MODEL_ID = "ollama/qwen2.5-coder:7b"
 DEFAULT_TEACHER_RUNTIME = "ollama"
-DEFAULT_TEACHER_RUNTIME_MODEL_ID = "deepseek-r1:latest"
-DEFAULT_TEACHER_REVISION = "6995872bfe4c"
-DEFAULT_TEACHER_LICENSE = "MIT"
-DEFAULT_TEACHER_SIZE = "5.2 GB"
-DEFAULT_TEACHER_CONTEXT_LENGTH = "128K"
+DEFAULT_TEACHER_RUNTIME_MODEL_ID = "qwen2.5-coder:7b"
+DEFAULT_TEACHER_REVISION = "dae161e27b0e"
+DEFAULT_TEACHER_LICENSE = "Apache-2.0"
+DEFAULT_TEACHER_SIZE = "4.7 GB"
+DEFAULT_TEACHER_CONTEXT_LENGTH = "32K"
 PROMPT_VERSION = "commit-message-teacher-v0.1"
 PROMPT_PATH = Path("prompts/commit-message-teacher-v0.1.md")
 DECODING_CONFIG = {

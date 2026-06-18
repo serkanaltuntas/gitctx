@@ -38,7 +38,9 @@ poor enough that more generation would only create cleanup work.
 
 ## Teacher
 
-The first approved local smoke teacher is recorded in
+The first successful local smoke teacher is recorded in
+[`teacher-decisions/ollama-qwen2.5-coder-7b-smoke.md`](teacher-decisions/ollama-qwen2.5-coder-7b-smoke.md).
+The replaced DeepSeek-R1 smoke attempt is retained in
 [`teacher-decisions/ollama-deepseek-r1-latest-smoke.md`](teacher-decisions/ollama-deepseek-r1-latest-smoke.md).
 The larger audit teacher option is recorded in
 [`teacher-decisions/deepseek-r1-0528-audit.md`](teacher-decisions/deepseek-r1-0528-audit.md).
