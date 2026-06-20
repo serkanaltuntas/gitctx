@@ -173,6 +173,134 @@ class DataArtifactTests(unittest.TestCase):
             self.assertIn("source-diffs.pilot.jsonl", checksum_path.read_text())
             self.assertIn("source-diffs.pilot.review.jsonl", checksum_path.read_text())
 
+    def test_named_source_artifact_can_use_custom_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "artifacts/next").mkdir(parents=True)
+            (root / "manifests").mkdir()
+            (root / "lineage").mkdir()
+            source_record = {
+                "id": "example-repo-222222222222",
+                "source_repo_url": "https://github.com/example/repo",
+                "source_license": "MIT",
+                "manifest_revision": "2222222222222222222222222222222222222222",
+                "source_commit": "2222222222222222222222222222222222222222",
+                "parent_commit": "1111111111111111111111111111111111111111",
+                "data_split": "REPORT",
+                "changed_paths": ["parser.py"],
+                "excluded_paths": [],
+                "diff_stat": " parser.py | 1 +",
+                "historical_subject": "fix(parser): reject empty values",
+                "extraction_command": "git diff --stat ...",
+                "review_status": "not_reviewed",
+            }
+            manifest_record = {
+                "repo_url": "https://github.com/example/repo",
+                "default_branch": "main",
+                "source_license": "MIT",
+                "license_url": "https://example.com/license",
+                "license_review_date": "2026-06-20",
+                "reviewer": "Test User",
+                "review_status": "approved_for_audit",
+                "source_revision": "2222222222222222222222222222222222222222",
+                "allowed_splits": ["DEV", "REPORT"],
+                "exclude_globs": ["vendor/**"],
+                "notes": "test",
+            }
+            (root / "artifacts/next/source-diffs.next.jsonl").write_text(
+                json.dumps(source_record) + "\n",
+                encoding="utf-8",
+            )
+            (root / "artifacts/next/source-diffs.next.report.json").write_text(
+                json.dumps(
+                    {
+                        "data_dir": "/private/path",
+                        "manifest_path": "/private/path/source-manifest.next.jsonl",
+                        "output_path": "/private/path/artifacts/next/source-diffs.next.jsonl",
+                        "written_records": 1,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "manifests/source-manifest.audit.jsonl").write_text("", encoding="utf-8")
+            (root / "manifests/source-manifest.next.jsonl").write_text(
+                json.dumps(manifest_record) + "\n",
+                encoding="utf-8",
+            )
+            (root / "lineage/gitctx-public-commit.txt").write_text("abc1234\n", encoding="utf-8")
+
+            report = normalize_source_report(
+                root,
+                artifact_name="next",
+                manifest_path="manifests/source-manifest.next.jsonl",
+            )
+            summary = validate_source_artifact(
+                root,
+                artifact_name="next",
+                manifest_path="manifests/source-manifest.next.jsonl",
+            )
+            checksum_path = write_checksums(root)
+
+            self.assertEqual(report["manifest_path"], "manifests/source-manifest.next.jsonl")
+            self.assertEqual(summary["manifest_path"], "manifests/source-manifest.next.jsonl")
+            checksum_text = checksum_path.read_text()
+            self.assertIn("manifests/source-manifest.audit.jsonl", checksum_text)
+            self.assertIn("manifests/source-manifest.next.jsonl", checksum_text)
+
+    def test_named_source_artifact_rejects_repo_missing_from_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "artifacts/next").mkdir(parents=True)
+            (root / "manifests").mkdir()
+            (root / "artifacts/next/source-diffs.next.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": "missing-repo-222222222222",
+                        "source_repo_url": "https://github.com/missing/repo",
+                        "source_license": "MIT",
+                        "manifest_revision": "2222222222222222222222222222222222222222",
+                        "source_commit": "2222222222222222222222222222222222222222",
+                        "parent_commit": "1111111111111111111111111111111111111111",
+                        "data_split": "DEV",
+                        "changed_paths": ["parser.py"],
+                        "excluded_paths": [],
+                        "diff_stat": " parser.py | 1 +",
+                        "historical_subject": "fix(parser): reject empty values",
+                        "extraction_command": "git diff --stat ...",
+                        "review_status": "not_reviewed",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "manifests/source-manifest.next.jsonl").write_text(
+                json.dumps(
+                    {
+                        "repo_url": "https://github.com/example/repo",
+                        "default_branch": "main",
+                        "source_license": "MIT",
+                        "license_url": "https://example.com/license",
+                        "license_review_date": "2026-06-20",
+                        "reviewer": "Test User",
+                        "review_status": "approved_for_audit",
+                        "source_revision": "2222222222222222222222222222222222222222",
+                        "allowed_splits": ["DEV"],
+                        "exclude_globs": ["vendor/**"],
+                        "notes": "test",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(SystemExit):
+                validate_source_artifact(
+                    root,
+                    artifact_name="next",
+                    manifest_path="manifests/source-manifest.next.jsonl",
+                )
+
     def test_creates_and_validates_generated_label_review_template(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

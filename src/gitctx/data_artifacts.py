@@ -71,15 +71,21 @@ def normalize_smoke_report(data_dir: str | Path) -> dict[str, Any]:
     return normalize_source_report(data_dir, artifact_name="smoke")
 
 
-def normalize_source_report(data_dir: str | Path, *, artifact_name: str) -> dict[str, Any]:
+def normalize_source_report(
+    data_dir: str | Path,
+    *,
+    artifact_name: str,
+    manifest_path: str | Path = SMOKE_MANIFEST,
+) -> dict[str, Any]:
     """Normalize machine-local paths in a named source-diff report."""
 
     data_dir = Path(data_dir)
+    manifest_path = Path(manifest_path)
     jsonl_path = source_jsonl_path(artifact_name)
     report_path = data_dir / source_report_path(artifact_name)
     report = json.loads(report_path.read_text(encoding="utf-8"))
     report["data_dir"] = "$GITCTX_DATA_DIR"
-    report["manifest_path"] = str(SMOKE_MANIFEST)
+    report["manifest_path"] = manifest_path.as_posix()
     report["output_path"] = str(jsonl_path)
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return report
@@ -91,17 +97,29 @@ def validate_smoke_artifact(data_dir: str | Path) -> dict[str, int]:
     return validate_source_artifact(data_dir, artifact_name="smoke")
 
 
-def validate_source_artifact(data_dir: str | Path, *, artifact_name: str) -> dict[str, int]:
+def validate_source_artifact(
+    data_dir: str | Path,
+    *,
+    artifact_name: str,
+    manifest_path: str | Path = SMOKE_MANIFEST,
+) -> dict[str, int]:
     """Validate named source-diff records and their manifest."""
 
     data_dir = Path(data_dir)
+    manifest_path = Path(manifest_path)
     source_records = load_jsonl(data_dir / source_jsonl_path(artifact_name))
-    manifest_records = load_jsonl(data_dir / SMOKE_MANIFEST)
+    manifest_records = load_jsonl(data_dir / manifest_path)
+    manifest_repos = {record.get("repo_url") for record in manifest_records}
 
-    source_errors = [
-        (record.get("id", "<missing-id>"), validate_source_diff_record(record))
-        for record in source_records
-    ]
+    source_errors = []
+    for record in source_records:
+        record_errors = list(validate_source_diff_record(record))
+        if record.get("source_repo_url") not in manifest_repos:
+            record_errors.append(
+                "source_repo_url is not present in the source manifest: "
+                f"{record.get('source_repo_url')}"
+            )
+        source_errors.append((record.get("id", "<missing-id>"), tuple(record_errors)))
     manifest_errors = [
         (record.get("repo_url", "<missing-repo>"), validate_source_manifest_entry(record))
         for record in manifest_records
@@ -116,6 +134,7 @@ def validate_source_artifact(data_dir: str | Path, *, artifact_name: str) -> dic
 
     summary = {
         "artifact_name": artifact_name,
+        "manifest_path": manifest_path.as_posix(),
         "source_records": len(source_records),
         "manifest_records": len(manifest_records),
         "source_errors": 0,
@@ -387,7 +406,11 @@ def write_checksums(data_dir: str | Path) -> Path:
     data_dir = Path(data_dir)
     checksum_path = data_dir / CHECKSUMS
     checksum_path.parent.mkdir(parents=True, exist_ok=True)
-    paths = [SMOKE_MANIFEST, GITCTX_COMMIT]
+    paths = [GITCTX_COMMIT]
+    manifests_dir = data_dir / "manifests"
+    if manifests_dir.exists():
+        for manifest_path in sorted(manifests_dir.glob("*.json*")):
+            paths.append(manifest_path.relative_to(data_dir))
     artifacts_dir = data_dir / "artifacts"
     if artifacts_dir.exists():
         for artifact_path in sorted(artifacts_dir.glob("*/*.json*")):
@@ -425,8 +448,10 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("validate-smoke")
     normalize_source = subparsers.add_parser("normalize-source")
     normalize_source.add_argument("--artifact-name", required=True)
+    normalize_source.add_argument("--manifest", default=str(SMOKE_MANIFEST))
     validate_source = subparsers.add_parser("validate-source")
     validate_source.add_argument("--artifact-name", required=True)
+    validate_source.add_argument("--manifest", default=str(SMOKE_MANIFEST))
     review_template = subparsers.add_parser("create-smoke-review-template")
     review_template.add_argument("--reviewer", required=True)
     review_template.add_argument("--overwrite", action="store_true")
@@ -457,9 +482,17 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "validate-smoke":
         validate_smoke_artifact(args.data_dir)
     elif args.command == "normalize-source":
-        normalize_source_report(args.data_dir, artifact_name=args.artifact_name)
+        normalize_source_report(
+            args.data_dir,
+            artifact_name=args.artifact_name,
+            manifest_path=args.manifest,
+        )
     elif args.command == "validate-source":
-        validate_source_artifact(args.data_dir, artifact_name=args.artifact_name)
+        validate_source_artifact(
+            args.data_dir,
+            artifact_name=args.artifact_name,
+            manifest_path=args.manifest,
+        )
     elif args.command == "create-smoke-review-template":
         print(
             create_smoke_review_template(
