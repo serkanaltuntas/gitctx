@@ -68,6 +68,33 @@ artifacts/eval/path-type-v0.<artifact>.v0.report.report.json
 This is a training/eval pipeline smoke, not a model-quality benchmark and not a
 public model release candidate.
 
+## Tiny Neural Smoke
+
+After the dependency-free prototype, gitctx can run a tiny dependency-free
+neural smoke:
+
+```bash
+make neural-smoke PILOT_ARTIFACT=next
+```
+
+This trains `tiny-softmax-v0`, a single-layer softmax classifier, on reviewed
+`DEV` records and evaluates Conventional Commit predictions on `REPORT`.
+Training uses deterministic gradient descent over path and diff-stat features.
+It writes a checkpoint-like JSON model artifact, prediction JSONL, and eval
+report.
+
+Artifacts:
+
+```text
+artifacts/models/tiny-softmax-v0.<artifact>.v0.json
+artifacts/eval/tiny-softmax-v0.<artifact>.v0.report.predictions.jsonl
+artifacts/eval/tiny-softmax-v0.<artifact>.v0.report.report.json
+```
+
+This is the first real neural-style training loop in the public repo, but it is
+still a smoke test. It is not a language model, not a model-quality benchmark,
+and not a public model release candidate.
+
 Minimum GCTX-1 proof-run conditions:
 
 - 10,000 reviewed `DEV` training records;

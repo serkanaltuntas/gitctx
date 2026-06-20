@@ -99,6 +99,16 @@ This consumes the reviewed SFT artifact, trains a small aggregate prototype on
 `DEV`, and evaluates predictions on `REPORT`. The resulting artifacts validate
 the training/eval flow; they do not establish model quality.
 
+Run the tiny dependency-free neural smoke after the prototype smoke:
+
+```bash
+make neural-smoke PILOT_ARTIFACT=next
+```
+
+This trains `tiny-softmax-v0`, a single-layer softmax classifier, on `DEV` and
+evaluates on `REPORT`. It validates the first gradient-descent model-artifact
+path, but it is still not a language model and not a model-quality claim.
+
 Equivalent direct commands:
 
 ```bash
