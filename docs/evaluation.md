@@ -88,10 +88,16 @@ After a reviewed SFT artifact exists, run the artifact baseline report:
 make pilot-eval-baseline
 ```
 
+For non-pilot artifacts, use the same evaluator with an explicit artifact name:
+
+```bash
+make artifact-eval-baseline PILOT_ARTIFACT=next
+```
+
 This writes:
 
 ```text
-artifacts/eval/sft.pilot.v0.baseline.report.json
+artifacts/eval/sft.<artifact>.v0.baseline.report.json
 ```
 
 The report scores three message sources with the same deterministic scorer:
@@ -100,9 +106,14 @@ The report scores three message sources with the same deterministic scorer:
 - `teacher`: the raw generated teacher label before human edit;
 - `historical`: the original commit subject, kept as weak comparison context.
 
+The report also includes `by_data_split`, which repeats the same target,
+teacher, and historical scoring for each available split. This is required for
+inspecting `REPORT` separately from `DEV`.
+
 This report is a data-quality check, not a model-quality claim. `pilot-v0` is
-DEV-only; do not report model progress until `REPORT` and `HELD_OUT` artifacts
-exist under the split contract.
+DEV-only. Later artifacts may include `REPORT`, but do not report model progress
+until a model is evaluated against `REPORT`, and do not make release claims until
+`HELD_OUT` artifacts exist under the split contract.
 
 ## Release Gates
 

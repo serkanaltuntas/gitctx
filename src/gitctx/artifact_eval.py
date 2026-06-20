@@ -93,6 +93,11 @@ def evaluate_training_artifact(
         "target": _score_messages(target_messages),
         "teacher": _score_messages(teacher_messages),
         "historical": _score_messages(historical_messages),
+        "by_data_split": _score_by_data_split(
+            target_messages=target_messages,
+            teacher_messages=teacher_messages,
+            historical_messages=historical_messages,
+        ),
     }
     _write_report(data_dir, artifact_name, version, report)
     for key in (
@@ -105,6 +110,33 @@ def evaluate_training_artifact(
     for label in ("target", "teacher", "historical"):
         print(f"{label}_format_validity", report[label]["format_validity"]["true"])
         print(f"{label}_scope_quality", report[label]["scope_quality"]["true"])
+    return report
+
+
+def _score_by_data_split(
+    *,
+    target_messages: list[tuple[dict[str, Any], str]],
+    teacher_messages: list[tuple[dict[str, Any], str]],
+    historical_messages: list[tuple[dict[str, Any], str]],
+) -> dict[str, Any]:
+    splits = sorted({record["data_split"] for record, _ in target_messages})
+    report: dict[str, Any] = {}
+    for split in splits:
+        split_target = [(record, message) for record, message in target_messages if record["data_split"] == split]
+        split_teacher = [
+            (record, message) for record, message in teacher_messages if record["data_split"] == split
+        ]
+        split_historical = [
+            (record, message)
+            for record, message in historical_messages
+            if record["data_split"] == split
+        ]
+        report[split] = {
+            "training_records": len(split_target),
+            "target": _score_messages(split_target),
+            "teacher": _score_messages(split_teacher),
+            "historical": _score_messages(split_historical),
+        }
     return report
 
 

@@ -22,6 +22,13 @@ class ArtifactEvalTests(unittest.TestCase):
             self.assertEqual(report["teacher"]["format_validity"]["true"], 2)
             self.assertEqual(report["historical"]["format_validity"]["false"], 1)
             self.assertEqual(report["label_source_counts"]["teacher_generated_human_edited"], 1)
+            self.assertEqual(report["by_data_split"]["DEV"]["training_records"], 1)
+            self.assertEqual(report["by_data_split"]["DEV"]["target"]["format_validity"]["true"], 1)
+            self.assertEqual(report["by_data_split"]["REPORT"]["training_records"], 1)
+            self.assertEqual(
+                report["by_data_split"]["REPORT"]["historical"]["format_validity"]["false"],
+                1,
+            )
             self.assertTrue((root / "artifacts/eval/sft.pilot.v0.baseline.report.json").exists())
 
     def _write_artifacts(self, root: Path) -> None:
@@ -40,7 +47,7 @@ class ArtifactEvalTests(unittest.TestCase):
                 "source_license": "MIT",
                 "source_commit": "1" * 40,
                 "parent_commit": "0" * 40,
-                "data_split": "DEV",
+                "data_split": "REPORT",
                 "changed_paths": ["src/parser.py"],
                 "diff_stat": " src/parser.py | 1 +",
                 "historical_subject": "fix parser",

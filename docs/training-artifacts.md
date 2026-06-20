@@ -70,6 +70,15 @@ Evaluate reviewed targets against raw teacher labels and historical subjects:
 make pilot-eval-baseline
 ```
 
+For another named artifact:
+
+```bash
+make artifact-eval-baseline PILOT_ARTIFACT=next
+```
+
+The baseline report includes aggregate scores plus `by_data_split`, so `REPORT`
+quality can be inspected separately from `DEV`.
+
 Equivalent direct commands:
 
 ```bash
