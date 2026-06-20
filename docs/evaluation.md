@@ -115,6 +115,24 @@ DEV-only. Later artifacts may include `REPORT`, but do not report model progress
 until a model is evaluated against `REPORT`, and do not make release claims until
 `HELD_OUT` artifacts exist under the split contract.
 
+To inspect a split record-by-record after the aggregate baseline exists:
+
+```bash
+make artifact-split-inspection PILOT_ARTIFACT=next DATA_SPLIT=REPORT
+```
+
+This writes:
+
+```text
+artifacts/eval/sft.<artifact>.v0.<split>.inspection.jsonl
+artifacts/eval/sft.<artifact>.v0.<split>.inspection.report.json
+```
+
+The inspection JSONL keeps private per-record material together: source id,
+changed paths, review decision, target message, raw teacher message, historical
+subject, and deterministic scorer output for each message source. Keep this
+artifact private until a data-card/output-use decision approves a release shape.
+
 ## Release Gates
 
 | Gate | Requirement |

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from gitctx.artifact_eval import evaluate_training_artifact
+from gitctx.artifact_eval import evaluate_training_artifact, inspect_training_artifact_split
 
 
 class ArtifactEvalTests(unittest.TestCase):
@@ -30,6 +30,28 @@ class ArtifactEvalTests(unittest.TestCase):
                 1,
             )
             self.assertTrue((root / "artifacts/eval/sft.pilot.v0.baseline.report.json").exists())
+
+    def test_writes_split_inspection_records(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifacts(root)
+
+            report = inspect_training_artifact_split(root, artifact_name="pilot", split="REPORT")
+
+            self.assertEqual(report["split"], "REPORT")
+            self.assertEqual(report["training_records"], 1)
+            self.assertEqual(report["inspection_records"], 1)
+            inspection_path = root / "artifacts/eval/sft.pilot.v0.report.inspection.jsonl"
+            self.assertTrue(inspection_path.exists())
+            records = [
+                json.loads(line)
+                for line in inspection_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(records[0]["data_split"], "REPORT")
+            self.assertEqual(records[0]["target_score"]["format_validity"], True)
+            self.assertEqual(records[0]["historical_score"]["format_validity"], False)
+            self.assertTrue((root / "artifacts/eval/sft.pilot.v0.report.inspection.report.json").exists())
 
     def _write_artifacts(self, root: Path) -> None:
         (root / "artifacts/train").mkdir(parents=True)

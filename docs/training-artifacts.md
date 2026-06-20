@@ -79,6 +79,16 @@ make artifact-eval-baseline PILOT_ARTIFACT=next
 The baseline report includes aggregate scores plus `by_data_split`, so `REPORT`
 quality can be inspected separately from `DEV`.
 
+For record-by-record split inspection:
+
+```bash
+make artifact-split-inspection PILOT_ARTIFACT=next DATA_SPLIT=REPORT
+```
+
+The inspection artifact is private review material. It is useful for deciding
+whether the current SFT artifact is ready for a proof-model pipeline run, but it
+is not itself a public model-quality claim.
+
 Equivalent direct commands:
 
 ```bash
