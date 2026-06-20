@@ -127,3 +127,8 @@ The first pilot data card and output-use decision are:
 
 - [`data-cards/pilot-v0.md`](data-cards/pilot-v0.md)
 - [`output-use-decisions/pilot-v0.md`](output-use-decisions/pilot-v0.md)
+
+The first expanded artifact card and output-use decision are:
+
+- [`data-cards/next-v0.md`](data-cards/next-v0.md)
+- [`output-use-decisions/next-v0.md`](output-use-decisions/next-v0.md)
