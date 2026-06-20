@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import fnmatch
 import json
 from pathlib import Path
@@ -64,16 +65,7 @@ def extract_source_diff_record(
     if not include_paths:
         return None
 
-    diff_stat = _git(
-        repo_path,
-        "diff",
-        "--stat",
-        "--find-renames",
-        parent_commit,
-        commit,
-        "--",
-        *include_paths,
-    )
+    diff_stat, diff_stat_scope = _diff_stat(repo_path, parent_commit, commit, include_paths)
     historical_subject = _git(repo_path, "show", "-s", "--format=%s", commit)
 
     short_commit = commit[:12]
@@ -92,6 +84,8 @@ def extract_source_diff_record(
         "historical_subject": historical_subject,
         "extraction_command": (
             "git diff --stat --find-renames <parent> <commit> -- <included_paths>"
+            if diff_stat_scope == "included_paths"
+            else "git diff --stat --find-renames <parent> <commit>"
         ),
         "review_status": "not_reviewed",
     }
@@ -110,6 +104,42 @@ def _partition_paths(paths: list[str], exclude_globs: list[str]) -> tuple[list[s
 
 def _repo_slug(repo_url: str) -> str:
     return repo_url.rstrip("/").removesuffix(".git").split("github.com/")[-1].replace("/", "-")
+
+
+def _diff_stat(
+    repo_path: str | Path,
+    parent_commit: str,
+    commit: str,
+    include_paths: list[str],
+) -> tuple[str, str]:
+    try:
+        return (
+            _git(
+                repo_path,
+                "diff",
+                "--stat",
+                "--find-renames",
+                parent_commit,
+                commit,
+                "--",
+                *include_paths,
+            ),
+            "included_paths",
+        )
+    except OSError as exc:
+        if exc.errno != errno.E2BIG:
+            raise
+        return (
+            _git(
+                repo_path,
+                "diff",
+                "--stat",
+                "--find-renames",
+                parent_commit,
+                commit,
+            ),
+            "all_paths",
+        )
 
 
 def _git(repo_path: str | Path, *args: str) -> str:

@@ -5,9 +5,10 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from gitctx.provenance import validate_source_diff_record
-from gitctx.source_extract import extract_source_diff_record, iter_candidate_commits
+from gitctx.source_extract import _diff_stat, extract_source_diff_record, iter_candidate_commits
 
 
 class SourceExtractTests(unittest.TestCase):
@@ -132,6 +133,27 @@ class SourceExtractTests(unittest.TestCase):
             self.assertIsNotNone(record)
             assert record is not None
             self.assertEqual(record["data_split"], "REPORT")
+
+    def test_diff_stat_falls_back_when_pathspec_is_too_large(self) -> None:
+        calls: list[tuple[str, ...]] = []
+
+        def fake_git(repo: Path, *args: str) -> str:
+            calls.append(args)
+            if "--" in args:
+                raise OSError(7, "Argument list too long")
+            return "fallback stat"
+
+        with patch("gitctx.source_extract._git", side_effect=fake_git):
+            diff_stat, scope = _diff_stat(
+                Path("/tmp/repo"),
+                "parent",
+                "commit",
+                ["src/file.py"] * 1000,
+            )
+
+        self.assertEqual(diff_stat, "fallback stat")
+        self.assertEqual(scope, "all_paths")
+        self.assertEqual(calls[-1], ("diff", "--stat", "--find-renames", "parent", "commit"))
 
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> str:
