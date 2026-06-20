@@ -217,6 +217,7 @@ class DataArtifactTests(unittest.TestCase):
                         "data_dir": "/private/path",
                         "manifest_path": "/private/path/source-manifest.next.jsonl",
                         "output_path": "/private/path/artifacts/next/source-diffs.next.jsonl",
+                        "split_plan_path": str(root / "manifests/split-plan.next.json"),
                         "written_records": 1,
                     }
                 )
@@ -228,6 +229,7 @@ class DataArtifactTests(unittest.TestCase):
                 json.dumps(manifest_record) + "\n",
                 encoding="utf-8",
             )
+            (root / "manifests/split-plan.next.json").write_text("{}\n", encoding="utf-8")
             (root / "lineage/gitctx-public-commit.txt").write_text("abc1234\n", encoding="utf-8")
 
             report = normalize_source_report(
@@ -243,6 +245,7 @@ class DataArtifactTests(unittest.TestCase):
             checksum_path = write_checksums(root)
 
             self.assertEqual(report["manifest_path"], "manifests/source-manifest.next.jsonl")
+            self.assertEqual(report["split_plan_path"], "manifests/split-plan.next.json")
             self.assertEqual(summary["manifest_path"], "manifests/source-manifest.next.jsonl")
             checksum_text = checksum_path.read_text()
             self.assertIn("manifests/source-manifest.audit.jsonl", checksum_text)

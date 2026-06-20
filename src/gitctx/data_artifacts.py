@@ -76,6 +76,7 @@ def normalize_source_report(
     *,
     artifact_name: str,
     manifest_path: str | Path = SMOKE_MANIFEST,
+    split_plan_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Normalize machine-local paths in a named source-diff report."""
 
@@ -86,6 +87,13 @@ def normalize_source_report(
     report = json.loads(report_path.read_text(encoding="utf-8"))
     report["data_dir"] = "$GITCTX_DATA_DIR"
     report["manifest_path"] = manifest_path.as_posix()
+    if split_plan_path is not None:
+        report["split_plan_path"] = Path(split_plan_path).as_posix()
+    elif isinstance(report.get("split_plan_path"), str):
+        report["split_plan_path"] = _normalize_under_data_dir(
+            report["split_plan_path"],
+            data_dir=data_dir,
+        )
     report["output_path"] = str(jsonl_path)
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return report
@@ -435,6 +443,16 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _normalize_under_data_dir(path: str, *, data_dir: Path) -> str:
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        return candidate.as_posix()
+    try:
+        return candidate.relative_to(data_dir).as_posix()
+    except ValueError:
+        return candidate.as_posix()
+
+
 def _validate_artifact_name(artifact_name: str) -> None:
     if not artifact_name.replace("-", "").replace("_", "").isalnum():
         raise ValueError("artifact_name must be a stable alphanumeric identifier")
@@ -449,6 +467,7 @@ def main(argv: list[str] | None = None) -> int:
     normalize_source = subparsers.add_parser("normalize-source")
     normalize_source.add_argument("--artifact-name", required=True)
     normalize_source.add_argument("--manifest", default=str(SMOKE_MANIFEST))
+    normalize_source.add_argument("--split-plan")
     validate_source = subparsers.add_parser("validate-source")
     validate_source.add_argument("--artifact-name", required=True)
     validate_source.add_argument("--manifest", default=str(SMOKE_MANIFEST))
@@ -486,6 +505,7 @@ def main(argv: list[str] | None = None) -> int:
             args.data_dir,
             artifact_name=args.artifact_name,
             manifest_path=args.manifest,
+            split_plan_path=args.split_plan,
         )
     elif args.command == "validate-source":
         validate_source_artifact(

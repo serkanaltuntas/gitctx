@@ -59,7 +59,7 @@ pilot-source-check:
 	wc -l "$(PILOT_JSONL)"
 
 pilot-source-normalize:
-	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" normalize-source --artifact-name "$(PILOT_ARTIFACT)" --manifest "$(SMOKE_MANIFEST)"
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" normalize-source --artifact-name "$(PILOT_ARTIFACT)" --manifest "$(SMOKE_MANIFEST)" $(if $(SPLIT_PLAN),--split-plan "$(SPLIT_PLAN)")
 
 pilot-source-validate:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-source --artifact-name "$(PILOT_ARTIFACT)" --manifest "$(SMOKE_MANIFEST)"
