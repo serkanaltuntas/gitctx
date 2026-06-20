@@ -258,9 +258,12 @@ def _predict_message(model: dict[str, Any], changed_paths: list[str]) -> str:
 
 def _predict_type(model: dict[str, Any], changed_paths: list[str]) -> str:
     token_type_counts = model.get("token_type_counts", {})
-    scores: Counter[str] = Counter(model.get("type_counts", {}))
+    scores: Counter[str] = Counter()
     for token in _path_tokens(changed_paths):
         scores.update(token_type_counts.get(token, {}))
+
+    if not scores:
+        scores.update(model.get("type_counts", {}))
 
     if any(_path_looks_like_docs(path) for path in changed_paths):
         scores["docs"] += 3
