@@ -4,12 +4,13 @@ SMOKE_MANIFEST ?= manifests/source-manifest.audit.jsonl
 SMOKE_RECORDS ?= 50
 PILOT_RECORDS ?= 250
 PILOT_PER_REPO_LIMIT ?= 100
+PILOT_ARTIFACT ?= pilot
 SPLIT_PLAN ?=
 SPLIT_PLAN_FLAG = $(if $(SPLIT_PLAN),--split-plan "$(SPLIT_PLAN)")
 SMOKE_REPORT = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.report.json
 SMOKE_JSONL = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.jsonl
-PILOT_REPORT = $(GITCTX_DATA_DIR)/artifacts/pilot/source-diffs.pilot.report.json
-PILOT_JSONL = $(GITCTX_DATA_DIR)/artifacts/pilot/source-diffs.pilot.jsonl
+PILOT_REPORT = $(GITCTX_DATA_DIR)/artifacts/$(PILOT_ARTIFACT)/source-diffs.$(PILOT_ARTIFACT).report.json
+PILOT_JSONL = $(GITCTX_DATA_DIR)/artifacts/$(PILOT_ARTIFACT)/source-diffs.$(PILOT_ARTIFACT).jsonl
 REVIEWER ?= reviewer@example.com
 OLLAMA_NUM_CTX ?= 8192
 OLLAMA_NUM_PREDICT ?= 1024
@@ -50,7 +51,7 @@ pilot-source: data-dir
 		--data-dir "$(GITCTX_DATA_DIR)" \
 		--records "$(PILOT_RECORDS)" \
 		--per-repo-limit "$(PILOT_PER_REPO_LIMIT)" \
-		--artifact-name pilot \
+		--artifact-name "$(PILOT_ARTIFACT)" \
 		$(SPLIT_PLAN_FLAG)
 
 pilot-source-check:
@@ -58,18 +59,18 @@ pilot-source-check:
 	wc -l "$(PILOT_JSONL)"
 
 pilot-source-normalize:
-	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" normalize-source --artifact-name pilot --manifest "$(SMOKE_MANIFEST)"
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" normalize-source --artifact-name "$(PILOT_ARTIFACT)" --manifest "$(SMOKE_MANIFEST)"
 
 pilot-source-validate:
-	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-source --artifact-name pilot --manifest "$(SMOKE_MANIFEST)"
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-source --artifact-name "$(PILOT_ARTIFACT)" --manifest "$(SMOKE_MANIFEST)"
 
 pilot-source-finalize: pilot-source-normalize pilot-source-validate smoke-checksum
 
 pilot-review-template:
-	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" create-source-review-template --artifact-name pilot --reviewer "$(REVIEWER)"
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" create-source-review-template --artifact-name "$(PILOT_ARTIFACT)" --reviewer "$(REVIEWER)"
 
 pilot-review-check:
-	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-source-review --artifact-name pilot
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-source-review --artifact-name "$(PILOT_ARTIFACT)"
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 smoke-review-template:
@@ -87,10 +88,10 @@ teacher-input-check:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 pilot-teacher-inputs:
-	PYTHONPATH=src $(PYTHON) -m gitctx.teacher_inputs --data-dir "$(GITCTX_DATA_DIR)" create --artifact-name pilot
+	PYTHONPATH=src $(PYTHON) -m gitctx.teacher_inputs --data-dir "$(GITCTX_DATA_DIR)" create --artifact-name "$(PILOT_ARTIFACT)"
 
 pilot-teacher-input-check:
-	PYTHONPATH=src $(PYTHON) -m gitctx.teacher_inputs --data-dir "$(GITCTX_DATA_DIR)" validate --artifact-name pilot
+	PYTHONPATH=src $(PYTHON) -m gitctx.teacher_inputs --data-dir "$(GITCTX_DATA_DIR)" validate --artifact-name "$(PILOT_ARTIFACT)"
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 teacher-generate:
@@ -104,13 +105,13 @@ teacher-generate-check:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 pilot-teacher-generate:
-	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" generate --artifact-name pilot \
+	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" generate --artifact-name "$(PILOT_ARTIFACT)" \
 		--num-ctx "$(OLLAMA_NUM_CTX)" \
 		--num-predict "$(OLLAMA_NUM_PREDICT)" \
 		--request-timeout "$(OLLAMA_REQUEST_TIMEOUT)"
 
 pilot-teacher-generate-check:
-	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" validate --artifact-name pilot
+	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" validate --artifact-name "$(PILOT_ARTIFACT)"
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 generated-review-template:
@@ -121,26 +122,26 @@ generated-review-check:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 pilot-generated-review-template:
-	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" create-named-generated-label-review-template --artifact-name pilot --reviewer "$(REVIEWER)"
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" create-named-generated-label-review-template --artifact-name "$(PILOT_ARTIFACT)" --reviewer "$(REVIEWER)"
 
 pilot-generated-review-check:
-	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-named-generated-label-review --artifact-name pilot
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-named-generated-label-review --artifact-name "$(PILOT_ARTIFACT)"
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 pilot-train-artifact:
 	PYTHONPATH=src $(PYTHON) -m gitctx.train_artifacts --data-dir "$(GITCTX_DATA_DIR)" create \
-		--artifact-name pilot \
+		--artifact-name "$(PILOT_ARTIFACT)" \
 		--version "$(TRAIN_VERSION)"
 
 pilot-train-artifact-check:
 	PYTHONPATH=src $(PYTHON) -m gitctx.train_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate \
-		--artifact-name pilot \
+		--artifact-name "$(PILOT_ARTIFACT)" \
 		--version "$(TRAIN_VERSION)"
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 pilot-eval-baseline:
 	PYTHONPATH=src $(PYTHON) -m gitctx.artifact_eval --data-dir "$(GITCTX_DATA_DIR)" evaluate \
-		--artifact-name pilot \
+		--artifact-name "$(PILOT_ARTIFACT)" \
 		--version "$(TRAIN_VERSION)"
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
