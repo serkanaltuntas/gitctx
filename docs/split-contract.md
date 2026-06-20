@@ -68,11 +68,26 @@ Each window records:
 - inclusive `start` timestamp;
 - exclusive `end` timestamp;
 - reason for the split decision.
+- optional `target_records` for planning gates.
 
 Windows for the same repository must not overlap. During extraction, a commit is
 included only when its source commit timestamp falls into one recorded window.
 The worker writes the `split_plan_path` into the source artifact report so the
 private data repository can prove which split plan produced an artifact.
+
+Before running a GCTX-1 planning extraction, check the manifest and split plan:
+
+```bash
+make split-readiness \
+  SOURCE_MANIFEST="$HOME/LAB/gitctx-data/manifests/source-manifest.gctx1.jsonl" \
+  SPLIT_PLAN="$HOME/LAB/gitctx-data/manifests/split-plan.gctx1.json"
+```
+
+The readiness report validates source-manifest entries, split windows,
+manifest/window consistency, HELD_OUT eligibility, planned record counts,
+repository counts, and ecosystem diversity. It does not replace post-extraction
+quality review; it only prevents obviously under-specified plans from entering
+the worker pipeline.
 
 Example worker shape:
 

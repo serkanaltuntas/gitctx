@@ -52,6 +52,10 @@
           "reason": {
             "type": "string",
             "minLength": 1
+          },
+          "target_records": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }

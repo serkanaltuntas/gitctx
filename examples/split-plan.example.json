@@ -10,7 +10,8 @@
       "split": "DEV",
       "start": "2025-01-01T00:00:00Z",
       "end": "2025-07-01T00:00:00Z",
-      "reason": "Example training window."
+      "reason": "Example training window.",
+      "target_records": 100
     },
     {
       "id": "example-report-2025-h2",
@@ -18,7 +19,8 @@
       "split": "REPORT",
       "start": "2025-07-01T00:00:00Z",
       "end": "2026-01-01T00:00:00Z",
-      "reason": "Example non-overlapping report window."
+      "reason": "Example non-overlapping report window.",
+      "target_records": 10
     }
   ]
 }

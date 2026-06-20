@@ -122,6 +122,10 @@ def validate_source_manifest_entry(entry: Mapping[str, Any]) -> tuple[str, ...]:
     if review_status == "approved_for_audit" and "HELD_OUT" in (allowed_splits or []):
         errors.append("approved_for_audit sources must not include HELD_OUT by default")
 
+    ecosystem = entry.get("ecosystem")
+    if ecosystem is not None and (not isinstance(ecosystem, str) or not ecosystem):
+        errors.append("ecosystem must be a non-empty string when present")
+
     return tuple(errors)
 
 

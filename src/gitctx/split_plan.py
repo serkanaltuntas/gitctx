@@ -129,6 +129,12 @@ def _validate_window(
             if parsed_start >= parsed_end:
                 errors.append(f"windows[{index}].start must be earlier than end")
 
+    target_records = window.get("target_records")
+    if target_records is not None and (
+        not isinstance(target_records, int) or target_records < 0
+    ):
+        errors.append(f"windows[{index}].target_records must be a non-negative integer")
+
     return tuple(errors)
 
 

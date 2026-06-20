@@ -64,10 +64,14 @@ Example:
   "review_status": "approved_for_audit",
   "source_revision": "0123456789abcdef0123456789abcdef01234567",
   "allowed_splits": ["DEV", "REPORT"],
+  "ecosystem": "python",
   "exclude_globs": ["vendor/**", "dist/**", "*.lock"],
   "notes": "Format example only; not an approved real source."
 }
 ```
+
+`ecosystem` is optional for small smoke artifacts, but should be present for any
+GCTX-1 planning manifest so diversity gates can be evaluated before extraction.
 
 ## Generated-Label Provenance
 

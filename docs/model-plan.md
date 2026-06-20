@@ -109,6 +109,8 @@ Minimum GCTX-1 proof-run conditions:
   baselines are recorded.
 
 The split policy is defined in [`split-contract.md`](split-contract.md).
+Run `make split-readiness` against any GCTX-1 planning manifest and split plan
+before extraction.
 
 ## Recommended First Public Model
 

@@ -58,6 +58,10 @@
         "enum": ["DEV", "REPORT", "HELD_OUT"]
       }
     },
+    "ecosystem": {
+      "type": "string",
+      "minLength": 1
+    },
     "exclude_globs": {
       "type": "array",
       "items": {
