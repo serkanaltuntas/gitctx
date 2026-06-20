@@ -89,6 +89,16 @@ The inspection artifact is private review material. It is useful for deciding
 whether the current SFT artifact is ready for a proof-model pipeline run, but it
 is not itself a public model-quality claim.
 
+Run the dependency-free training smoke after the baseline and split inspection:
+
+```bash
+make training-smoke PILOT_ARTIFACT=next
+```
+
+This consumes the reviewed SFT artifact, trains a small aggregate prototype on
+`DEV`, and evaluates predictions on `REPORT`. The resulting artifacts validate
+the training/eval flow; they do not establish model quality.
+
 Equivalent direct commands:
 
 ```bash

@@ -133,6 +133,29 @@ changed paths, review decision, target message, raw teacher message, historical
 subject, and deterministic scorer output for each message source. Keep this
 artifact private until a data-card/output-use decision approves a release shape.
 
+## Training Pipeline Smoke Eval
+
+After the SFT artifact baseline and split inspection pass, run the dependency-
+free prototype model to validate the model-artifact and prediction-artifact
+flow:
+
+```bash
+make training-smoke PILOT_ARTIFACT=next
+```
+
+This writes:
+
+```text
+artifacts/models/path-type-v0.<artifact>.v0.json
+artifacts/eval/path-type-v0.<artifact>.v0.report.predictions.jsonl
+artifacts/eval/path-type-v0.<artifact>.v0.report.report.json
+```
+
+The prototype is a deterministic path-token/type model trained on `DEV` and
+evaluated on `REPORT`. It should be used only to validate the training/eval
+pipeline. It is not a neural model, not a quality claim, and not a release
+candidate.
+
 ## Release Gates
 
 | Gate | Requirement |

@@ -17,8 +17,9 @@ OLLAMA_NUM_CTX ?= 8192
 OLLAMA_NUM_PREDICT ?= 1024
 OLLAMA_REQUEST_TIMEOUT ?= 300
 TRAIN_VERSION ?= v0
+PROTOTYPE_MODEL_VERSION ?= path-type-v0
 
-.PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check artifact-eval-baseline artifact-split-inspection pilot-eval-baseline test fixture-eval
+.PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check artifact-eval-baseline artifact-split-inspection training-smoke-train training-smoke-eval training-smoke pilot-eval-baseline test fixture-eval
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -152,6 +153,24 @@ artifact-split-inspection:
 		--split "$(DATA_SPLIT)" \
 		--version "$(TRAIN_VERSION)"
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
+
+training-smoke-train:
+	PYTHONPATH=src $(PYTHON) -m gitctx.prototype_model --data-dir "$(GITCTX_DATA_DIR)" train \
+		--artifact-name "$(PILOT_ARTIFACT)" \
+		--artifact-version "$(TRAIN_VERSION)" \
+		--model-version "$(PROTOTYPE_MODEL_VERSION)" \
+		--train-split DEV
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
+
+training-smoke-eval:
+	PYTHONPATH=src $(PYTHON) -m gitctx.prototype_model --data-dir "$(GITCTX_DATA_DIR)" evaluate \
+		--artifact-name "$(PILOT_ARTIFACT)" \
+		--artifact-version "$(TRAIN_VERSION)" \
+		--model-version "$(PROTOTYPE_MODEL_VERSION)" \
+		--split REPORT
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
+
+training-smoke: training-smoke-train training-smoke-eval
 
 pilot-eval-baseline: artifact-eval-baseline
 

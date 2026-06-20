@@ -41,6 +41,33 @@ GCTX-1 is not unlocked by the existence of a tiny `DEV` artifact. A local smoke
 model may be trained earlier to test code paths, but it carries no quality
 claim.
 
+## Training Pipeline Smoke
+
+Before training a neural model, gitctx uses a dependency-free prototype model to
+validate the artifact contract:
+
+```bash
+make training-smoke PILOT_ARTIFACT=next
+```
+
+This trains `path-type-v0` on the `DEV` records in a reviewed SFT artifact and
+evaluates deterministic predictions on `REPORT`. The prototype model learns only
+aggregate path-token/type statistics and emits simple Conventional Commit
+messages. It is intentionally weak. Its purpose is to prove that model
+artifacts, prediction artifacts, and eval reports can be produced from the SFT
+artifact without changing the data lineage.
+
+Artifacts:
+
+```text
+artifacts/models/path-type-v0.<artifact>.v0.json
+artifacts/eval/path-type-v0.<artifact>.v0.report.predictions.jsonl
+artifacts/eval/path-type-v0.<artifact>.v0.report.report.json
+```
+
+This is a training/eval pipeline smoke, not a model-quality benchmark and not a
+public model release candidate.
+
 Minimum GCTX-1 proof-run conditions:
 
 - 10,000 reviewed `DEV` training records;

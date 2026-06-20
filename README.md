@@ -92,6 +92,8 @@ make pilot-generated-review-check
 make pilot-train-artifact
 make pilot-train-artifact-check
 make pilot-eval-baseline
+make artifact-split-inspection PILOT_ARTIFACT=next DATA_SPLIT=REPORT
+make training-smoke PILOT_ARTIFACT=next
 ```
 
 For non-smoke artifacts that contain `REPORT` or `HELD_OUT` candidates, pass a
