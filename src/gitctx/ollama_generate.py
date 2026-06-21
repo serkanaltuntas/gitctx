@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import urllib.error
 import urllib.request
-from typing import Any
+from typing import Any, Callable
 
 from gitctx.conventional import CommitContext, score_commit_message
 from gitctx.provenance import (
@@ -20,6 +20,7 @@ from gitctx.teacher_inputs import teacher_inputs_path
 
 SMOKE_GENERATED_LABELS = Path("artifacts/teacher/generated-labels.smoke.jsonl")
 SMOKE_GENERATED_REPORT = Path("artifacts/teacher/generated-labels.smoke.report.json")
+ProgressCallback = Callable[[dict[str, Any]], None]
 
 
 def generate_smoke_labels(
@@ -32,6 +33,7 @@ def generate_smoke_labels(
     request_timeout: int = 600,
     resume: bool = True,
     think: bool = False,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     """Generate labels for smoke teacher inputs and write JSONL plus report."""
 
@@ -45,6 +47,7 @@ def generate_smoke_labels(
         request_timeout=request_timeout,
         resume=resume,
         think=think,
+        progress_callback=progress_callback,
     )
 
 
@@ -59,6 +62,7 @@ def generate_labels(
     request_timeout: int = 600,
     resume: bool = True,
     think: bool = False,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     """Generate labels for a named teacher-input artifact and write JSONL plus report."""
 
@@ -76,13 +80,14 @@ def generate_labels(
     existing_records = _load_existing(output_path) if resume else []
     existing_ids = {record["id"] for record in existing_records}
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    _print_generation_progress(
+    _report_generation_progress(
         processed=0,
         total=len(teacher_inputs),
         generated=0,
         skipped=0,
         failed=0,
         force=True,
+        progress_callback=progress_callback,
     )
 
     generated = 0
@@ -93,13 +98,15 @@ def generate_labels(
             output_id = f"generated-{teacher_input['source_diff_id']}"
             if output_id in existing_ids:
                 skipped += 1
-                _print_generation_progress(
+                _report_generation_progress(
                     processed=index,
                     total=len(teacher_inputs),
                     generated=generated,
                     skipped=skipped,
                     failed=len(failures),
                     progress_every=progress_every,
+                    current_record_id=output_id,
+                    progress_callback=progress_callback,
                 )
                 continue
             try:
@@ -126,13 +133,15 @@ def generate_labels(
                         "error": str(exc),
                     }
                 )
-            _print_generation_progress(
+            _report_generation_progress(
                 processed=index,
                 total=len(teacher_inputs),
                 generated=generated,
                 skipped=skipped,
                 failed=len(failures),
                 progress_every=progress_every,
+                current_record_id=output_id,
+                progress_callback=progress_callback,
             )
 
     report = {
@@ -228,7 +237,7 @@ def _load_existing(path: Path) -> list[dict[str, Any]]:
     return load_jsonl(path)
 
 
-def _print_generation_progress(
+def _report_generation_progress(
     *,
     processed: int,
     total: int,
@@ -236,7 +245,9 @@ def _print_generation_progress(
     skipped: int,
     failed: int,
     progress_every: int = 25,
+    current_record_id: str | None = None,
     force: bool = False,
+    progress_callback: ProgressCallback | None = None,
 ) -> None:
     percent = 100.0 if total == 0 else processed / total * 100.0
     if not force and progress_every > 0 and processed != total and processed % progress_every != 0:
@@ -250,6 +261,18 @@ def _print_generation_progress(
         f"failed={failed}",
         flush=True,
     )
+    if progress_callback is not None:
+        event: dict[str, Any] = {
+            "processed": processed,
+            "total": total,
+            "generated": generated,
+            "skipped": skipped,
+            "failed": failed,
+            "percent": percent,
+        }
+        if current_record_id is not None:
+            event["current_record_id"] = current_record_id
+        progress_callback(event)
 
 
 def _call_ollama(

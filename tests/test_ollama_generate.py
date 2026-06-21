@@ -93,6 +93,32 @@ class OllamaGenerateTests(unittest.TestCase):
             self.assertEqual(report["skipped_existing_records"], 1)
             self.assertEqual(report["failed_records"], 0)
 
+    def test_progress_callback_reports_generation_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root)
+            events = []
+            server, thread = self._start_fake_ollama()
+            try:
+                generate_smoke_labels(
+                    root,
+                    ollama_url=f"http://127.0.0.1:{server.server_port}",
+                    progress_every=1,
+                    resume=False,
+                    progress_callback=events.append,
+                )
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+            self.assertEqual(events[0]["processed"], 0)
+            self.assertEqual(events[0]["total"], 1)
+            self.assertEqual(events[-1]["processed"], 1)
+            self.assertEqual(events[-1]["generated"], 1)
+            self.assertEqual(events[-1]["failed"], 0)
+            self.assertEqual(events[-1]["current_record_id"], "generated-example-repo-111111111111")
+
     def test_scope_only_parser_error_does_not_lower_verifier_score(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
