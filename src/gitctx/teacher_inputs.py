@@ -226,6 +226,54 @@ def validate_teacher_inputs(data_dir: str | Path, *, artifact_name: str) -> dict
     return summary
 
 
+def validate_source_cache(data_dir: str | Path, *, artifact_name: str) -> dict[str, int]:
+    """Validate that accepted source-diff reviews can be diffed from local clones."""
+
+    _validate_artifact_name(artifact_name)
+    data_dir = Path(data_dir)
+    source_records = load_jsonl(data_dir / source_diffs_path(artifact_name))
+    review_records = load_jsonl(data_dir / source_review_path(artifact_name))
+    source_by_id = {record["id"]: record for record in source_records}
+    accepted_source_ids = [
+        record["source_diff_id"]
+        for record in review_records
+        if record.get("decision") == "accepted_for_teacher_labeling"
+    ]
+    required_repos: set[str] = set()
+    missing_repos: set[str] = set()
+    missing_revisions: list[str] = []
+
+    for source_id in accepted_source_ids:
+        source = source_by_id[source_id]
+        repo_dir = data_dir / _repo_cache_path(source["source_repo_url"])
+        required_repos.add(source["source_repo_url"])
+        if not repo_dir.exists():
+            missing_repos.add(source["source_repo_url"])
+            continue
+        for revision_key in ("parent_commit", "source_commit"):
+            revision = source[revision_key]
+            if not _git_has_revision(repo_dir, revision):
+                missing_revisions.append(f"{source['source_repo_url']}:{revision}")
+
+    if missing_repos or missing_revisions:
+        for repo_url in sorted(missing_repos):
+            print(f"FAIL missing repo clone: {repo_url}")
+        for revision in sorted(missing_revisions):
+            print(f"FAIL missing revision: {revision}")
+        raise SystemExit(1)
+
+    summary = {
+        "artifact_name": artifact_name,
+        "accepted_review_records": len(accepted_source_ids),
+        "required_repos": len(required_repos),
+        "missing_repos": 0,
+        "missing_revisions": 0,
+    }
+    for key, value in summary.items():
+        print(key, value)
+    return summary
+
+
 def source_diffs_path(artifact_name: str) -> Path:
     """Return the source-diff JSONL path for a named artifact."""
 
@@ -291,6 +339,19 @@ def _read_git_diff(data_dir: Path, source_record: dict[str, Any]) -> str:
     return subprocess.check_output(command, cwd=repo_dir, text=True, errors="replace")
 
 
+def _git_has_revision(repo_dir: Path, revision: str) -> bool:
+    return (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{revision}^{{commit}}"],
+            cwd=repo_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
 def _repo_cache_path(repo_url: str) -> Path:
     if not repo_url.startswith("https://github.com/"):
         raise ValueError(f"unsupported repo URL: {repo_url}")
@@ -326,6 +387,8 @@ def main(argv: list[str] | None = None) -> int:
     create.add_argument("--artifact-name", required=True)
     validate = subparsers.add_parser("validate")
     validate.add_argument("--artifact-name", required=True)
+    validate_cache = subparsers.add_parser("validate-source-cache")
+    validate_cache.add_argument("--artifact-name", required=True)
     args = parser.parse_args(argv)
 
     if args.command == "create-smoke":
@@ -365,6 +428,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "validate":
         validate_teacher_inputs(args.data_dir, artifact_name=args.artifact_name)
+    elif args.command == "validate-source-cache":
+        validate_source_cache(args.data_dir, artifact_name=args.artifact_name)
     return 0
 
 
