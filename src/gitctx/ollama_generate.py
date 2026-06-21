@@ -28,6 +28,7 @@ def generate_smoke_labels(
     ollama_url: str = "http://127.0.0.1:11434",
     limit: int | None = None,
     ollama_options: dict[str, Any] | None = None,
+    progress_every: int = 25,
     request_timeout: int = 600,
     resume: bool = True,
     think: bool = False,
@@ -40,6 +41,7 @@ def generate_smoke_labels(
         ollama_url=ollama_url,
         limit=limit,
         ollama_options=ollama_options,
+        progress_every=progress_every,
         request_timeout=request_timeout,
         resume=resume,
         think=think,
@@ -53,6 +55,7 @@ def generate_labels(
     ollama_url: str = "http://127.0.0.1:11434",
     limit: int | None = None,
     ollama_options: dict[str, Any] | None = None,
+    progress_every: int = 25,
     request_timeout: int = 600,
     resume: bool = True,
     think: bool = False,
@@ -73,15 +76,31 @@ def generate_labels(
     existing_records = _load_existing(output_path) if resume else []
     existing_ids = {record["id"] for record in existing_records}
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    _print_generation_progress(
+        processed=0,
+        total=len(teacher_inputs),
+        generated=0,
+        skipped=0,
+        failed=0,
+        force=True,
+    )
 
     generated = 0
     skipped = 0
     failures: list[dict[str, Any]] = []
     with output_path.open("a" if resume else "w", encoding="utf-8") as f:
-        for teacher_input in teacher_inputs:
+        for index, teacher_input in enumerate(teacher_inputs, 1):
             output_id = f"generated-{teacher_input['source_diff_id']}"
             if output_id in existing_ids:
                 skipped += 1
+                _print_generation_progress(
+                    processed=index,
+                    total=len(teacher_inputs),
+                    generated=generated,
+                    skipped=skipped,
+                    failed=len(failures),
+                    progress_every=progress_every,
+                )
                 continue
             try:
                 raw_content = _call_ollama(
@@ -97,6 +116,7 @@ def generate_labels(
                 if errors:
                     raise ValueError("; ".join(errors))
                 f.write(json.dumps(record, sort_keys=True) + "\n")
+                f.flush()
                 generated += 1
             except Exception as exc:  # noqa: BLE001 - preserve per-record failures.
                 failures.append(
@@ -106,6 +126,14 @@ def generate_labels(
                         "error": str(exc),
                     }
                 )
+            _print_generation_progress(
+                processed=index,
+                total=len(teacher_inputs),
+                generated=generated,
+                skipped=skipped,
+                failed=len(failures),
+                progress_every=progress_every,
+            )
 
     report = {
         "artifact_name": artifact_name,
@@ -198,6 +226,30 @@ def _load_existing(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     return load_jsonl(path)
+
+
+def _print_generation_progress(
+    *,
+    processed: int,
+    total: int,
+    generated: int,
+    skipped: int,
+    failed: int,
+    progress_every: int = 25,
+    force: bool = False,
+) -> None:
+    percent = 100.0 if total == 0 else processed / total * 100.0
+    if not force and progress_every > 0 and processed != total and processed % progress_every != 0:
+        return
+    print(
+        "progress "
+        f"{processed}/{total} "
+        f"({percent:.2f}%) "
+        f"generated={generated} "
+        f"skipped={skipped} "
+        f"failed={failed}",
+        flush=True,
+    )
 
 
 def _call_ollama(
@@ -419,6 +471,7 @@ def main(argv: list[str] | None = None) -> int:
     generate.add_argument("--no-resume", action="store_true")
     generate.add_argument("--num-ctx", type=int)
     generate.add_argument("--num-predict", type=int)
+    generate.add_argument("--progress-every", type=int, default=25)
     generate.add_argument("--request-timeout", type=int, default=600)
     generate.add_argument("--think", action="store_true")
     subparsers.add_parser("validate-smoke")
@@ -428,6 +481,7 @@ def main(argv: list[str] | None = None) -> int:
     generate_named.add_argument("--no-resume", action="store_true")
     generate_named.add_argument("--num-ctx", type=int)
     generate_named.add_argument("--num-predict", type=int)
+    generate_named.add_argument("--progress-every", type=int, default=25)
     generate_named.add_argument("--request-timeout", type=int, default=600)
     generate_named.add_argument("--think", action="store_true")
     validate_named = subparsers.add_parser("validate")
@@ -440,6 +494,7 @@ def main(argv: list[str] | None = None) -> int:
             ollama_url=args.ollama_url,
             limit=args.limit,
             ollama_options={"num_ctx": args.num_ctx, "num_predict": args.num_predict},
+            progress_every=args.progress_every,
             request_timeout=args.request_timeout,
             resume=not args.no_resume,
             think=args.think,
@@ -453,6 +508,7 @@ def main(argv: list[str] | None = None) -> int:
             ollama_url=args.ollama_url,
             limit=args.limit,
             ollama_options={"num_ctx": args.num_ctx, "num_predict": args.num_predict},
+            progress_every=args.progress_every,
             request_timeout=args.request_timeout,
             resume=not args.no_resume,
             think=args.think,

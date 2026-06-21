@@ -73,6 +73,26 @@ class OllamaGenerateTests(unittest.TestCase):
             label = json.loads(label_path.read_text(encoding="utf-8"))
             self.assertEqual(label["header"], "fix(parser): handle empty values")
 
+    def test_resume_skips_existing_generated_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root)
+            generated_path = root / "artifacts/teacher/generated-labels.smoke.jsonl"
+            generated_path.write_text(
+                json.dumps({"id": "generated-example-repo-111111111111"}) + "\n",
+                encoding="utf-8",
+            )
+
+            report = generate_smoke_labels(
+                root,
+                ollama_url="http://127.0.0.1:9",
+                resume=True,
+            )
+
+            self.assertEqual(report["generated_records"], 0)
+            self.assertEqual(report["skipped_existing_records"], 1)
+            self.assertEqual(report["failed_records"], 0)
+
     def test_scope_only_parser_error_does_not_lower_verifier_score(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

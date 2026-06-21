@@ -16,6 +16,7 @@ PILOT_JSONL = $(GITCTX_DATA_DIR)/artifacts/$(PILOT_ARTIFACT)/source-diffs.$(PILO
 REVIEWER ?= reviewer@example.com
 OLLAMA_NUM_CTX ?= 8192
 OLLAMA_NUM_PREDICT ?= 1024
+OLLAMA_PROGRESS_EVERY ?= 25
 OLLAMA_REQUEST_TIMEOUT ?= 300
 TRAIN_VERSION ?= v0
 PROTOTYPE_MODEL_VERSION ?= path-type-v0
@@ -111,6 +112,7 @@ teacher-generate:
 	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" generate-smoke \
 		--num-ctx "$(OLLAMA_NUM_CTX)" \
 		--num-predict "$(OLLAMA_NUM_PREDICT)" \
+		--progress-every "$(OLLAMA_PROGRESS_EVERY)" \
 		--request-timeout "$(OLLAMA_REQUEST_TIMEOUT)"
 
 teacher-generate-check:
@@ -121,6 +123,7 @@ pilot-teacher-generate:
 	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" generate --artifact-name "$(PILOT_ARTIFACT)" \
 		--num-ctx "$(OLLAMA_NUM_CTX)" \
 		--num-predict "$(OLLAMA_NUM_PREDICT)" \
+		--progress-every "$(OLLAMA_PROGRESS_EVERY)" \
 		--request-timeout "$(OLLAMA_REQUEST_TIMEOUT)"
 
 pilot-teacher-generate-check:
