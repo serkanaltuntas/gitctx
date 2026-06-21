@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import hashlib
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from gitctx.provenance import (
@@ -28,6 +30,71 @@ GITCTX_COMMIT = Path("lineage/gitctx-public-commit.txt")
 CHECKSUMS = Path("checksums/sha256.txt")
 REVIEW_PROTOCOL = "source-diff-smoke-review-v0.1"
 GENERATED_LABEL_REVIEW_PROTOCOL = "generated-label-smoke-review-v0.1"
+SOURCE_REVIEW_POLICY_VERSION = "source-review-policy-v0.1"
+_NOISE_SUBJECT_RE = re.compile(
+    r"\b(merge|revert|release|bump|deps?|dependenc|changelog|change log|"
+    r"pre-commit|version)\b",
+    re.IGNORECASE,
+)
+_DOC_EXTENSIONS = frozenset({".md", ".rst", ".txt", ".adoc", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico"})
+_CONFIG_FILENAMES = frozenset(
+    {
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "poetry.lock",
+        "uv.lock",
+        "cargo.lock",
+        "go.sum",
+        "package.json",
+        ".pre-commit-config.yaml",
+    }
+)
+_NOISE_PATH_PARTS = frozenset(
+    {
+        ".github",
+        "docs",
+        "doc",
+        "documentation",
+        "changelog",
+        "changes",
+        "news",
+        "release",
+        "releases",
+        "vendor",
+        "generated",
+        "dist",
+        "build",
+        "coverage",
+    }
+)
+_GENERATED_EXPECTED_OUTPUT_PARTS = frozenset({"baselines", "snapshots", "snapshot"})
+_CODE_EXTENSIONS = frozenset(
+    {
+        ".py",
+        ".pyi",
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".rs",
+        ".go",
+        ".java",
+        ".kt",
+        ".c",
+        ".h",
+        ".cc",
+        ".cpp",
+        ".hpp",
+        ".cs",
+        ".rb",
+        ".php",
+        ".swift",
+        ".vue",
+        ".svelte",
+    }
+)
+_TEST_PATH_PARTS = frozenset({"test", "tests", "testing", "spec", "specs", "cases"})
 
 
 def source_jsonl_path(artifact_name: str) -> Path:
@@ -277,6 +344,86 @@ def validate_source_review(data_dir: str | Path, *, artifact_name: str) -> dict[
     return summary
 
 
+def apply_source_review_policy(
+    data_dir: str | Path,
+    *,
+    artifact_name: str,
+    reviewer: str,
+    review_timestamp: str = "TBD",
+    overwrite_reviewed: bool = False,
+    write: bool = False,
+) -> dict[str, int]:
+    """Fill source-diff review decisions with deterministic eligibility policy."""
+
+    data_dir = Path(data_dir)
+    source_records = load_jsonl(data_dir / source_jsonl_path(artifact_name))
+    review_path = data_dir / source_review_path(artifact_name)
+    review_records = load_jsonl(review_path)
+    source_by_id = {record["id"]: record for record in source_records}
+    updated_records = []
+    decision_counts: Counter[str] = Counter()
+    reason_counts: Counter[str] = Counter()
+    split_decision_counts: Counter[tuple[str, str]] = Counter()
+    changed_records = 0
+    preserved_records = 0
+
+    for review in review_records:
+        source = source_by_id.get(review.get("source_diff_id"))
+        if source is None:
+            updated_records.append(review)
+            decision = str(review.get("decision"))
+            decision_counts[decision] += 1
+            split_decision_counts[(str(review.get("data_split")), decision)] += 1
+            preserved_records += 1
+            continue
+        if review.get("decision") != "needs_review" and not overwrite_reviewed:
+            updated_records.append(review)
+            decision = str(review.get("decision"))
+            decision_counts[decision] += 1
+            split_decision_counts[(str(review.get("data_split")), decision)] += 1
+            preserved_records += 1
+            continue
+
+        decision, reasons, notes = _source_review_policy_decision(source)
+        updated = dict(review)
+        updated["decision"] = decision
+        updated["reasons"] = reasons
+        updated["notes"] = notes
+        updated["reviewer"] = reviewer
+        updated["review_timestamp"] = review_timestamp
+        updated_records.append(updated)
+        decision_counts[decision] += 1
+        split_decision_counts[(str(source.get("data_split")), decision)] += 1
+        reason_counts.update(reasons)
+        changed_records += 1
+
+    if write:
+        review_path.write_text(
+            "\n".join(json.dumps(record, sort_keys=True) for record in updated_records) + "\n",
+            encoding="utf-8",
+        )
+
+    summary = {
+        "artifact_name": artifact_name,
+        "source_records": len(source_records),
+        "review_records": len(review_records),
+        "changed_records": changed_records,
+        "preserved_records": preserved_records,
+        "needs_review": decision_counts["needs_review"],
+        "accepted_for_teacher_labeling": decision_counts["accepted_for_teacher_labeling"],
+        "rejected": decision_counts["rejected"],
+    }
+    for key, value in summary.items():
+        print(key, value)
+    for (split, decision), count in sorted(split_decision_counts.items()):
+        print(f"split_{split}_{decision}", count)
+    for reason, count in sorted(reason_counts.items()):
+        print(f"reason_{reason}", count)
+    if not write:
+        print("dry_run", True)
+    return summary
+
+
 def create_generated_label_review_template(
     data_dir: str | Path,
     *,
@@ -443,6 +590,101 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _source_review_policy_decision(record: dict[str, Any]) -> tuple[str, list[str], str]:
+    changed_paths = list(record["changed_paths"])
+    file_count, insertions, deletions = _diff_stat_counts(record.get("diff_stat", ""), changed_paths)
+    churn = insertions + deletions
+    lowered_paths = [path.lower() for path in changed_paths]
+
+    if record.get("data_split") == "HELD_OUT":
+        return _reject("held_out_reserved", "HELD_OUT source diffs stay reserved.")
+    if _NOISE_SUBJECT_RE.search(record.get("historical_subject", "")):
+        return _reject("noise_subject", "Historical subject indicates release, dependency, or merge noise.")
+    if file_count > 30:
+        return _reject("too_many_files", f"Touches {file_count} files.")
+    if churn > 3000:
+        return _reject("too_large_churn", f"Diffstat churn is {churn} changed lines.")
+    if _has_generated_expected_output_bulk(lowered_paths, file_count=file_count, churn=churn):
+        return _reject(
+            "generated_expected_output_bulk",
+            "Large generated expected-output update is not useful teacher input.",
+        )
+    if _all_paths_are_noise(lowered_paths):
+        return _reject("noise_paths_only", "Only docs, release, config, lockfile, or generated paths.")
+
+    if _has_code_or_test_signal(lowered_paths):
+        return (
+            "accepted_for_teacher_labeling",
+            ["source_or_test_change"],
+            f"{SOURCE_REVIEW_POLICY_VERSION}; deterministic source/test eligibility.",
+        )
+    if file_count <= 3 and churn <= 200:
+        return (
+            "accepted_for_teacher_labeling",
+            ["small_other_change"],
+            f"{SOURCE_REVIEW_POLICY_VERSION}; small non-noise change.",
+        )
+    return _reject("no_code_signal", "No source or test signal detected.")
+
+
+def _reject(reason: str, note: str) -> tuple[str, list[str], str]:
+    return "rejected", [reason], f"{SOURCE_REVIEW_POLICY_VERSION}; {note}"
+
+
+def _diff_stat_counts(diff_stat: str, changed_paths: list[str]) -> tuple[int, int, int]:
+    files_match = re.search(r"(\d+) files? changed", diff_stat)
+    file_count = int(files_match.group(1)) if files_match else len(changed_paths)
+    insertions = sum(
+        int(match.replace(",", "")) for match in re.findall(r"(\d[\d,]*) insertion", diff_stat)
+    )
+    deletions = sum(
+        int(match.replace(",", "")) for match in re.findall(r"(\d[\d,]*) deletion", diff_stat)
+    )
+    return file_count, insertions, deletions
+
+
+def _has_generated_expected_output_bulk(
+    lowered_paths: list[str],
+    *,
+    file_count: int,
+    churn: int,
+) -> bool:
+    has_generated_path = any(_path_has_part(path, _GENERATED_EXPECTED_OUTPUT_PARTS) for path in lowered_paths)
+    return has_generated_path and (file_count > 8 or churn > 800)
+
+
+def _all_paths_are_noise(lowered_paths: list[str]) -> bool:
+    return all(_path_is_noise(path) for path in lowered_paths)
+
+
+def _path_is_noise(path: str) -> bool:
+    filename = path.rsplit("/", 1)[-1]
+    return (
+        _path_has_part(path, _NOISE_PATH_PARTS)
+        or filename in _CONFIG_FILENAMES
+        or _path_extension(path) in _DOC_EXTENSIONS
+    )
+
+
+def _has_code_or_test_signal(lowered_paths: list[str]) -> bool:
+    return any(_path_extension(path) in _CODE_EXTENSIONS for path in lowered_paths) or any(
+        _path_has_part(path, _TEST_PATH_PARTS) for path in lowered_paths
+    )
+
+
+def _path_has_part(path: str, candidates: frozenset[str]) -> bool:
+    parts = set(path.split("/")[:-1])
+    parts.add(path.rsplit("/", 1)[-1])
+    return bool(parts & candidates)
+
+
+def _path_extension(path: str) -> str:
+    filename = path.rsplit("/", 1)[-1]
+    if "." not in filename:
+        return ""
+    return "." + filename.rsplit(".", 1)[1]
+
+
 def _normalize_under_data_dir(path: str, *, data_dir: Path) -> str:
     candidate = Path(path)
     if not candidate.is_absolute():
@@ -481,6 +723,12 @@ def main(argv: list[str] | None = None) -> int:
     source_review_template.add_argument("--overwrite", action="store_true")
     validate_source_review_parser = subparsers.add_parser("validate-source-review")
     validate_source_review_parser.add_argument("--artifact-name", required=True)
+    source_review_policy = subparsers.add_parser("apply-source-review-policy")
+    source_review_policy.add_argument("--artifact-name", required=True)
+    source_review_policy.add_argument("--reviewer", required=True)
+    source_review_policy.add_argument("--review-timestamp", default="TBD")
+    source_review_policy.add_argument("--overwrite-reviewed", action="store_true")
+    source_review_policy.add_argument("--write", action="store_true")
     generated_review_template = subparsers.add_parser("create-generated-label-review-template")
     generated_review_template.add_argument("--reviewer", required=True)
     generated_review_template.add_argument("--overwrite", action="store_true")
@@ -534,6 +782,15 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "validate-source-review":
         validate_source_review(args.data_dir, artifact_name=args.artifact_name)
+    elif args.command == "apply-source-review-policy":
+        apply_source_review_policy(
+            args.data_dir,
+            artifact_name=args.artifact_name,
+            reviewer=args.reviewer,
+            review_timestamp=args.review_timestamp,
+            overwrite_reviewed=args.overwrite_reviewed,
+            write=args.write,
+        )
     elif args.command == "create-generated-label-review-template":
         print(
             create_generated_label_review_template(

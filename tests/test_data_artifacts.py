@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from gitctx.data_artifacts import (
+    apply_source_review_policy,
     create_generated_label_review_template,
     create_named_generated_label_review_template,
     create_smoke_review_template,
@@ -18,6 +19,31 @@ from gitctx.data_artifacts import (
     validate_smoke_artifact,
     write_checksums,
 )
+
+
+def _source_record(
+    record_id: str,
+    changed_paths: list[str],
+    historical_subject: str,
+    diff_stat: str,
+    *,
+    data_split: str,
+) -> dict[str, object]:
+    return {
+        "id": f"example-repo-{record_id}",
+        "source_repo_url": "https://github.com/example/repo",
+        "source_license": "MIT",
+        "manifest_revision": "1111111111111111111111111111111111111111",
+        "source_commit": "1111111111111111111111111111111111111111",
+        "parent_commit": "0000000000000000000000000000000000000000",
+        "data_split": data_split,
+        "changed_paths": changed_paths,
+        "excluded_paths": [],
+        "diff_stat": diff_stat,
+        "historical_subject": historical_subject,
+        "extraction_command": "git diff --stat ...",
+        "review_status": "not_reviewed",
+    }
 
 
 class DataArtifactTests(unittest.TestCase):
@@ -303,6 +329,79 @@ class DataArtifactTests(unittest.TestCase):
                     artifact_name="next",
                     manifest_path="manifests/source-manifest.next.jsonl",
                 )
+
+    def test_applies_source_review_policy_to_pending_records(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "artifacts/pilot").mkdir(parents=True)
+            (root / "reviews").mkdir()
+            records = [
+                _source_record(
+                    "code-change",
+                    ["src/parser.py", "tests/test_parser.py"],
+                    "fix parser edge case",
+                    "2 files changed, 10 insertions(+), 2 deletions(-)",
+                    data_split="DEV",
+                ),
+                _source_record(
+                    "held-out",
+                    ["src/parser.py"],
+                    "fix held out edge case",
+                    "1 file changed, 3 insertions(+)",
+                    data_split="HELD_OUT",
+                ),
+                _source_record(
+                    "docs-only",
+                    ["docs/usage.md"],
+                    "clarify docs",
+                    "1 file changed, 5 insertions(+)",
+                    data_split="REPORT",
+                ),
+                _source_record(
+                    "dep-bump",
+                    ["src/parser.py"],
+                    "bump parser dependency",
+                    "1 file changed, 2 insertions(+)",
+                    data_split="DEV",
+                ),
+            ]
+            (root / "artifacts/pilot/source-diffs.pilot.jsonl").write_text(
+                "\n".join(json.dumps(record) for record in records) + "\n",
+                encoding="utf-8",
+            )
+            create_source_review_template(
+                root,
+                artifact_name="pilot",
+                reviewer="reviewer@example.com",
+            )
+
+            dry_summary = apply_source_review_policy(
+                root,
+                artifact_name="pilot",
+                reviewer="reviewer@example.com",
+            )
+            dry_review = validate_source_review(root, artifact_name="pilot")
+            self.assertEqual(dry_summary["accepted_for_teacher_labeling"], 1)
+            self.assertEqual(dry_review["needs_review"], 4)
+
+            summary = apply_source_review_policy(
+                root,
+                artifact_name="pilot",
+                reviewer="reviewer@example.com",
+                review_timestamp="2026-06-21T00:00:00Z",
+                write=True,
+            )
+            review_summary = validate_source_review(root, artifact_name="pilot")
+            decisions = [
+                json.loads(line)["decision"]
+                for line in (root / "reviews/source-diffs.pilot.review.jsonl").read_text().splitlines()
+            ]
+
+            self.assertEqual(summary["accepted_for_teacher_labeling"], 1)
+            self.assertEqual(summary["rejected"], 3)
+            self.assertEqual(review_summary["needs_review"], 0)
+            self.assertEqual(decisions.count("accepted_for_teacher_labeling"), 1)
+            self.assertEqual(decisions.count("rejected"), 3)
 
     def test_creates_and_validates_generated_label_review_template(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

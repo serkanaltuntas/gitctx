@@ -29,6 +29,30 @@ Acceptance guidance:
   release bookkeeping, generated files, dependency bumps, or formatting-only
   churn.
 
+For large artifacts, use the deterministic review policy before manual review.
+It fills only `needs_review` records by default, preserves existing decisions,
+rejects HELD_OUT records from teacher labeling, rejects obvious release/dependency
+noise, and accepts source/test-shaped DEV or REPORT records for teacher labeling.
+
+Dry-run the policy:
+
+```bash
+python -m gitctx.data_artifacts \
+  --data-dir "$GITCTX_DATA_DIR" \
+  apply-source-review-policy \
+  --artifact-name pilot \
+  --reviewer "reviewer@example.com"
+```
+
+Apply it through Make:
+
+```bash
+make pilot-review-policy \
+  GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" \
+  PILOT_ARTIFACT=pilot \
+  REVIEWER="reviewer@example.com"
+```
+
 The review decision does not approve public redistribution. It only decides
 whether a source diff is eligible for the private teacher-label audit.
 

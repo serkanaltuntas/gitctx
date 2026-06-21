@@ -24,7 +24,7 @@ NEURAL_EPOCHS ?= 25
 NEURAL_LEARNING_RATE ?= 0.35
 NEURAL_L2 ?= 0.0001
 
-.PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check artifact-eval-baseline artifact-split-inspection training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
+.PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-policy pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check artifact-eval-baseline artifact-split-inspection training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -75,6 +75,9 @@ pilot-source-finalize: pilot-source-normalize pilot-source-validate smoke-checks
 
 pilot-review-template:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" create-source-review-template --artifact-name "$(PILOT_ARTIFACT)" --reviewer "$(REVIEWER)"
+
+pilot-review-policy:
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" apply-source-review-policy --artifact-name "$(PILOT_ARTIFACT)" --reviewer "$(REVIEWER)" --write
 
 pilot-review-check:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-source-review --artifact-name "$(PILOT_ARTIFACT)"
