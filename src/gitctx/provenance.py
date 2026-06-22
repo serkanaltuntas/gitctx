@@ -209,6 +209,10 @@ def validate_generated_label_matches_input(
     """Return validation errors for a generated label against its teacher input."""
 
     errors = list(validate_generated_label_record(label))
+    source_diff_id = teacher_input.get("source_diff_id")
+    expected_id = f"generated-{source_diff_id}" if isinstance(source_diff_id, str) else None
+    if expected_id is not None and label.get("id") != expected_id:
+        errors.append("id does not match teacher input source_diff_id")
     for key in (
         "source_repo_url",
         "source_license",
