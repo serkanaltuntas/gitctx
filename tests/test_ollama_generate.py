@@ -93,6 +93,34 @@ class OllamaGenerateTests(unittest.TestCase):
             self.assertEqual(report["skipped_existing_records"], 1)
             self.assertEqual(report["failed_records"], 0)
 
+    def test_generate_can_allow_record_failures_for_partial_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root)
+            report = generate_smoke_labels(
+                root,
+                ollama_url="http://127.0.0.1:9",
+                resume=False,
+                request_timeout=1,
+                allow_failures=True,
+            )
+
+            self.assertEqual(report["generated_records"], 0)
+            self.assertEqual(report["failed_records"], 1)
+
+    def test_validate_can_allow_missing_generated_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root)
+            generated_path = root / "artifacts/teacher/generated-labels.smoke.jsonl"
+            generated_path.write_text("", encoding="utf-8")
+
+            summary = validate_smoke_generated_labels(root, allow_missing=True)
+
+            self.assertEqual(summary["teacher_input_records"], 1)
+            self.assertEqual(summary["generated_label_records"], 0)
+            self.assertEqual(summary["missing_generated_label_records"], 1)
+
     def test_progress_callback_reports_generation_progress(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -231,6 +231,19 @@ artifacts/teacher/generated-labels.pilot.report.json
 If the worker stops, rerun `make teacher-generate`; it resumes by skipping
 existing generated-label ids.
 
+Generated-label validation is strict by default: every teacher-input record must
+have one generated-label record. For larger artifacts, a small number of
+deterministic teacher failures may be accepted explicitly after inspection. Use
+the allow flags only when the failed records are recorded in the generation
+report and the remaining labels are still valid:
+
+```bash
+make pilot-teacher-generate GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" ALLOW_GENERATION_FAILURES=1
+make pilot-teacher-generate-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" ALLOW_MISSING_LABELS=1
+```
+
+This keeps partial success visible instead of silently dropping examples.
+
 ## Prepare Generated-Label Review
 
 After generated labels validate, create a human-review template:

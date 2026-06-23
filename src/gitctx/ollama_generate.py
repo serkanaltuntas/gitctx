@@ -34,6 +34,7 @@ def generate_smoke_labels(
     resume: bool = True,
     think: bool = False,
     progress_callback: ProgressCallback | None = None,
+    allow_failures: bool = False,
 ) -> dict[str, Any]:
     """Generate labels for smoke teacher inputs and write JSONL plus report."""
 
@@ -48,6 +49,7 @@ def generate_smoke_labels(
         resume=resume,
         think=think,
         progress_callback=progress_callback,
+        allow_failures=allow_failures,
     )
 
 
@@ -63,6 +65,7 @@ def generate_labels(
     resume: bool = True,
     think: bool = False,
     progress_callback: ProgressCallback | None = None,
+    allow_failures: bool = False,
 ) -> dict[str, Any]:
     """Generate labels for a named teacher-input artifact and write JSONL plus report."""
 
@@ -161,18 +164,31 @@ def generate_labels(
         "failed_records",
     ):
         print(key, report[key])
-    if failures:
+    if failures and not allow_failures:
         raise SystemExit(1)
     return report
 
 
-def validate_smoke_generated_labels(data_dir: str | Path) -> dict[str, int]:
+def validate_smoke_generated_labels(
+    data_dir: str | Path,
+    *,
+    allow_missing: bool = False,
+) -> dict[str, int]:
     """Validate generated-label smoke artifacts against teacher inputs."""
 
-    return validate_generated_labels(data_dir, artifact_name="smoke")
+    return validate_generated_labels(
+        data_dir,
+        artifact_name="smoke",
+        allow_missing=allow_missing,
+    )
 
 
-def validate_generated_labels(data_dir: str | Path, *, artifact_name: str) -> dict[str, int]:
+def validate_generated_labels(
+    data_dir: str | Path,
+    *,
+    artifact_name: str,
+    allow_missing: bool = False,
+) -> dict[str, int]:
     """Validate generated-label artifacts against named teacher inputs."""
 
     _validate_artifact_name(artifact_name)
@@ -199,7 +215,7 @@ def validate_generated_labels(data_dir: str | Path, *, artifact_name: str) -> di
             failures.append((str(record_id), tuple(errors)))
 
     missing = sorted(set(inputs_by_source_id) - seen_source_ids)
-    if missing:
+    if missing and not allow_missing:
         failures.append(("<missing-generated-labels>", tuple(missing)))
 
     if failures:
@@ -211,6 +227,7 @@ def validate_generated_labels(data_dir: str | Path, *, artifact_name: str) -> di
         "artifact_name": artifact_name,
         "teacher_input_records": len(teacher_inputs),
         "generated_label_records": len(generated_labels),
+        "missing_generated_label_records": len(missing),
     }
     for key, value in summary.items():
         print(key, value)
@@ -565,7 +582,9 @@ def main(argv: list[str] | None = None) -> int:
     generate.add_argument("--progress-every", type=int, default=25)
     generate.add_argument("--request-timeout", type=int, default=600)
     generate.add_argument("--think", action="store_true")
-    subparsers.add_parser("validate-smoke")
+    generate.add_argument("--allow-failures", action="store_true")
+    validate_smoke = subparsers.add_parser("validate-smoke")
+    validate_smoke.add_argument("--allow-missing", action="store_true")
     generate_named = subparsers.add_parser("generate")
     generate_named.add_argument("--artifact-name", required=True)
     generate_named.add_argument("--limit", type=int)
@@ -575,8 +594,10 @@ def main(argv: list[str] | None = None) -> int:
     generate_named.add_argument("--progress-every", type=int, default=25)
     generate_named.add_argument("--request-timeout", type=int, default=600)
     generate_named.add_argument("--think", action="store_true")
+    generate_named.add_argument("--allow-failures", action="store_true")
     validate_named = subparsers.add_parser("validate")
     validate_named.add_argument("--artifact-name", required=True)
+    validate_named.add_argument("--allow-missing", action="store_true")
     args = parser.parse_args(argv)
 
     if args.command == "generate-smoke":
@@ -589,9 +610,10 @@ def main(argv: list[str] | None = None) -> int:
             request_timeout=args.request_timeout,
             resume=not args.no_resume,
             think=args.think,
+            allow_failures=args.allow_failures,
         )
     elif args.command == "validate-smoke":
-        validate_smoke_generated_labels(args.data_dir)
+        validate_smoke_generated_labels(args.data_dir, allow_missing=args.allow_missing)
     elif args.command == "generate":
         generate_labels(
             args.data_dir,
@@ -603,9 +625,14 @@ def main(argv: list[str] | None = None) -> int:
             request_timeout=args.request_timeout,
             resume=not args.no_resume,
             think=args.think,
+            allow_failures=args.allow_failures,
         )
     elif args.command == "validate":
-        validate_generated_labels(args.data_dir, artifact_name=args.artifact_name)
+        validate_generated_labels(
+            args.data_dir,
+            artifact_name=args.artifact_name,
+            allow_missing=args.allow_missing,
+        )
     return 0
 
 

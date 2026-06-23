@@ -82,6 +82,33 @@ Generation sends one teacher input record per Ollama call. Do not batch many
 diffs into one prompt; per-record calls keep provenance, validation, retries,
 and resume behavior clean.
 
+The expected teacher response is JSON, not a single plain sentence:
+
+```json
+{
+  "header": "type(scope): concise subject",
+  "body": ["optional body line"],
+  "footers": ["optional footer"],
+  "type": "type",
+  "scope": "scope or null",
+  "confidence": 0.0,
+  "warnings": ["optional warning"],
+  "evidence_paths": ["path/from/input"]
+}
+```
+
+`header` is the first commit-message line. `body` and `footers` may be empty.
+For large artifacts, generation can continue with a recorded partial result
+when a small number of teacher records fail deterministically:
+
+```bash
+make pilot-teacher-generate ALLOW_GENERATION_FAILURES=1
+make pilot-teacher-generate-check ALLOW_MISSING_LABELS=1
+```
+
+Use those flags only when the failed records are preserved in the report and the
+remaining generated labels validate.
+
 Prepare generated-label human review:
 
 ```bash

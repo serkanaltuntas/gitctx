@@ -18,6 +18,10 @@ OLLAMA_NUM_CTX ?= 8192
 OLLAMA_NUM_PREDICT ?= 1024
 OLLAMA_PROGRESS_EVERY ?= 25
 OLLAMA_REQUEST_TIMEOUT ?= 300
+ALLOW_GENERATION_FAILURES ?= 0
+ALLOW_MISSING_LABELS ?= 0
+ALLOW_GENERATION_FAILURES_FLAG = $(if $(filter 1 true yes,$(ALLOW_GENERATION_FAILURES)),--allow-failures)
+ALLOW_MISSING_LABELS_FLAG = $(if $(filter 1 true yes,$(ALLOW_MISSING_LABELS)),--allow-missing)
 TRAIN_VERSION ?= v0
 PROTOTYPE_MODEL_VERSION ?= path-type-v0
 NEURAL_MODEL_VERSION ?= tiny-softmax-v0
@@ -113,10 +117,12 @@ teacher-generate:
 		--num-ctx "$(OLLAMA_NUM_CTX)" \
 		--num-predict "$(OLLAMA_NUM_PREDICT)" \
 		--progress-every "$(OLLAMA_PROGRESS_EVERY)" \
-		--request-timeout "$(OLLAMA_REQUEST_TIMEOUT)"
+		--request-timeout "$(OLLAMA_REQUEST_TIMEOUT)" \
+		$(ALLOW_GENERATION_FAILURES_FLAG)
 
 teacher-generate-check:
-	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" validate-smoke
+	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" validate-smoke \
+		$(ALLOW_MISSING_LABELS_FLAG)
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 pilot-teacher-generate:
@@ -124,10 +130,12 @@ pilot-teacher-generate:
 		--num-ctx "$(OLLAMA_NUM_CTX)" \
 		--num-predict "$(OLLAMA_NUM_PREDICT)" \
 		--progress-every "$(OLLAMA_PROGRESS_EVERY)" \
-		--request-timeout "$(OLLAMA_REQUEST_TIMEOUT)"
+		--request-timeout "$(OLLAMA_REQUEST_TIMEOUT)" \
+		$(ALLOW_GENERATION_FAILURES_FLAG)
 
 pilot-teacher-generate-check:
-	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" validate --artifact-name "$(PILOT_ARTIFACT)"
+	PYTHONPATH=src $(PYTHON) -m gitctx.ollama_generate --data-dir "$(GITCTX_DATA_DIR)" validate --artifact-name "$(PILOT_ARTIFACT)" \
+		$(ALLOW_MISSING_LABELS_FLAG)
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 generated-review-template:
