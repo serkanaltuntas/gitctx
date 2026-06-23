@@ -79,6 +79,24 @@ make artifact-eval-baseline PILOT_ARTIFACT=next
 The baseline report includes aggregate scores plus `by_data_split`, so `REPORT`
 quality can be inspected separately from `DEV`.
 
+Check whether a reviewed artifact is ready for a GCTX proof-model run:
+
+```bash
+make proof-readiness PILOT_ARTIFACT=gctx1
+```
+
+This writes:
+
+```text
+artifacts/eval/sft.gctx1.v0.proof-readiness.report.json
+```
+
+The report checks actual reviewed `DEV`/`REPORT` counts, repository diversity,
+reserved `HELD_OUT` planning coverage, max per-repository contribution, source
+manifest linkage, and baseline availability. It does not fail the command when
+the artifact is not ready; use the report to decide whether to expand data or
+record a smaller private proof-run decision.
+
 For record-by-record split inspection:
 
 ```bash

@@ -31,8 +31,12 @@ NEURAL_MODEL_VERSION ?= tiny-softmax-v0
 NEURAL_EPOCHS ?= 25
 NEURAL_LEARNING_RATE ?= 0.35
 NEURAL_L2 ?= 0.0001
+PROOF_SOURCE_MANIFEST ?= manifests/source-manifest.$(PILOT_ARTIFACT).jsonl
+PROOF_SPLIT_PLAN ?= manifests/split-plan.$(PILOT_ARTIFACT).json
+PROOF_WRITE ?= 1
+PROOF_WRITE_FLAG = $(if $(filter 1 true yes,$(PROOF_WRITE)),--write)
 
-.PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-policy pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-source-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-policy pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check artifact-eval-baseline artifact-split-inspection training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
+.PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-policy pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-source-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-policy pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check artifact-eval-baseline artifact-split-inspection proof-readiness training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -184,6 +188,15 @@ artifact-split-inspection:
 		--artifact-name "$(PILOT_ARTIFACT)" \
 		--split "$(DATA_SPLIT)" \
 		--version "$(TRAIN_VERSION)"
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
+
+proof-readiness:
+	PYTHONPATH=src $(PYTHON) -m gitctx.proof_readiness --data-dir "$(GITCTX_DATA_DIR)" evaluate \
+		--artifact-name "$(PILOT_ARTIFACT)" \
+		--version "$(TRAIN_VERSION)" \
+		--source-manifest "$(PROOF_SOURCE_MANIFEST)" \
+		--split-plan "$(PROOF_SPLIT_PLAN)" \
+		$(PROOF_WRITE_FLAG)
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 training-smoke-train:

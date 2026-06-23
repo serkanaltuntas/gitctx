@@ -112,6 +112,19 @@ The split policy is defined in [`split-contract.md`](split-contract.md).
 Run `make split-readiness` against any GCTX-1 planning manifest and split plan
 before extraction.
 
+After reviewed SFT artifact creation, run proof readiness against the promoted
+artifact:
+
+```bash
+make proof-readiness PILOT_ARTIFACT=gctx1
+```
+
+`split-readiness` checks whether the planned DEV/REPORT/HELD_OUT windows are
+valid before extraction. `proof-readiness` checks the actual promoted SFT
+artifact and records whether the GCTX-1 proof-run gates are met. A failed
+readiness report is still a useful artifact: it identifies the exact missing
+condition before expensive training starts.
+
 ## Recommended First Public Model
 
 - 150M-300M decoder-only model;
