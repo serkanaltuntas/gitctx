@@ -227,6 +227,63 @@ class OllamaGenerateTests(unittest.TestCase):
             self.assertEqual(label["header"], "fix(parser): handle empty values")
             self.assertIn("normalized to JSON candidate", label["warnings"][0])
 
+    def test_plain_commit_inside_prose_is_normalized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root)
+            server, thread = self._start_fake_ollama(
+                raw_content=(
+                    "Here is the commit message:\n\n"
+                    "```text\n"
+                    "fix(parser): handle empty values\n"
+                    "```\n"
+                )
+            )
+            try:
+                generate_smoke_labels(
+                    root,
+                    ollama_url=f"http://127.0.0.1:{server.server_port}",
+                    resume=False,
+                )
+                validate_smoke_generated_labels(root)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+            label = json.loads(
+                (root / "artifacts/teacher/generated-labels.smoke.jsonl").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(label["header"], "fix(parser): handle empty values")
+
+    def test_json_string_commit_output_is_normalized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root)
+            server, thread = self._start_fake_ollama(
+                raw_content=json.dumps("fix(parser): handle empty values")
+            )
+            try:
+                generate_smoke_labels(
+                    root,
+                    ollama_url=f"http://127.0.0.1:{server.server_port}",
+                    resume=False,
+                )
+                validate_smoke_generated_labels(root)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+            label = json.loads(
+                (root / "artifacts/teacher/generated-labels.smoke.jsonl").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(label["header"], "fix(parser): handle empty values")
+
     def _write_teacher_inputs(self, root: Path, *, artifact_name: str = "smoke") -> None:
         (root / "artifacts/teacher").mkdir(parents=True)
         record = {

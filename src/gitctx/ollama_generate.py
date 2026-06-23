@@ -346,6 +346,7 @@ def _parse_teacher_json(raw_content: str) -> dict[str, Any]:
 def _parse_plain_commit_candidate(content: str) -> dict[str, Any]:
     """Recover the common teacher failure mode: plain Conventional Commit text."""
 
+    content = _extract_plain_commit_message(content)
     try:
         parsed = parse_commit_message(content)
     except ValueError as exc:
@@ -362,6 +363,45 @@ def _parse_plain_commit_candidate(content: str) -> dict[str, Any]:
         ],
         "evidence_paths": [],
     }
+
+
+def _extract_plain_commit_message(content: str) -> str:
+    """Return the first parseable Conventional Commit message from text output."""
+
+    stripped = content.strip()
+    if not stripped:
+        return stripped
+    try:
+        decoded = json.loads(stripped)
+    except json.JSONDecodeError:
+        decoded = None
+    if isinstance(decoded, str):
+        stripped = decoded.strip()
+
+    candidates = [stripped]
+    lines = stripped.splitlines()
+    for index, line in enumerate(lines):
+        line = line.strip()
+        if not line or line.startswith("```"):
+            continue
+        candidates.append("\n".join([line, *lines[index + 1 :]]).strip())
+
+    for candidate in candidates:
+        candidate = _strip_surrounding_code_fence(candidate)
+        try:
+            parse_commit_message(candidate)
+        except ValueError:
+            continue
+        return candidate
+    return stripped
+
+
+def _strip_surrounding_code_fence(content: str) -> str:
+    stripped = content.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    stripped = re.sub(r"^```(?:[a-zA-Z0-9_-]+)?", "", stripped).strip()
+    return re.sub(r"```$", "", stripped).strip()
 
 
 def _build_generated_label(
