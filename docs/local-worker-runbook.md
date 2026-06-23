@@ -263,6 +263,7 @@ For pilot labels:
 
 ```bash
 make pilot-generated-review-template GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" REVIEWER="reviewer@example.com"
+make pilot-generated-review-policy GITCTX_DATA_DIR="$HOME/LAB/gitctx-data" REVIEWER="reviewer@example.com" WRITE=1
 make pilot-generated-review-check GITCTX_DATA_DIR="$HOME/LAB/gitctx-data"
 ```
 
@@ -271,6 +272,11 @@ This writes:
 ```text
 reviews/generated-labels.pilot.review.jsonl
 ```
+
+The deterministic generated-label review policy is conservative: labels with
+`verifier_score == 1.0` and no parser errors are accepted; all others are
+rejected. Use manual review or a later policy version if a larger artifact needs
+to recover borderline examples.
 
 Review decisions start as `needs_review`. Use `accept`, `edit`, or `reject`
 after inspecting the generated label against the diff. Use issue tags such as
