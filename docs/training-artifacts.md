@@ -142,3 +142,8 @@ The first expanded artifact card and output-use decision are:
 
 - [`data-cards/next-v0.md`](data-cards/next-v0.md)
 - [`output-use-decisions/next-v0.md`](output-use-decisions/next-v0.md)
+
+The first GCTX-scale proof artifact card and output-use decision are:
+
+- [`data-cards/gctx1-v0.md`](data-cards/gctx1-v0.md)
+- [`output-use-decisions/gctx1-v0.md`](output-use-decisions/gctx1-v0.md)

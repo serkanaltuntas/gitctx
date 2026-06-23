@@ -10,9 +10,13 @@ needed for independent inspection and reproduction.
 
 ## Status
 
-Early planning and repository bootstrap. The first implementation work is the
-data, evaluation, teacher-labeling, and model loop. The CLI shell comes later,
-after model behavior is measurable.
+The project has a private GCTX-1 proof artifact with reviewed training records,
+baseline reports, and smoke-model evals. The public repository contains the
+source code, schemas, prompts, runbooks, aggregate data cards, and output-use
+decisions needed to inspect the recipe.
+
+There is no useful public model release yet. The CLI shell comes later, after
+model behavior is measurable.
 
 ## Principles
 
@@ -113,8 +117,10 @@ See:
 - [docs/training-artifacts.md](docs/training-artifacts.md)
 - [docs/data-cards/pilot-v0.md](docs/data-cards/pilot-v0.md)
 - [docs/data-cards/next-v0.md](docs/data-cards/next-v0.md)
+- [docs/data-cards/gctx1-v0.md](docs/data-cards/gctx1-v0.md)
 - [docs/output-use-decisions/pilot-v0.md](docs/output-use-decisions/pilot-v0.md)
 - [docs/output-use-decisions/next-v0.md](docs/output-use-decisions/next-v0.md)
+- [docs/output-use-decisions/gctx1-v0.md](docs/output-use-decisions/gctx1-v0.md)
 - [schemas/generated-label-review.schema.json](schemas/generated-label-review.schema.json)
 - [schemas/training-example.schema.json](schemas/training-example.schema.json)
 - [docs/local-worker-runbook.md](docs/local-worker-runbook.md)
