@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from gitctx.data_artifacts import (
+    apply_generated_label_review_policy,
     apply_source_review_policy,
     create_generated_label_review_template,
     create_named_generated_label_review_template,
@@ -43,6 +44,45 @@ def _source_record(
         "historical_subject": historical_subject,
         "extraction_command": "git diff --stat ...",
         "review_status": "not_reviewed",
+    }
+
+
+def _generated_label(
+    suffix: str,
+    *,
+    header: str = "fix(parser): handle empty values",
+    verifier_score: float = 1.0,
+    parser_errors: object = None,
+) -> dict[str, object]:
+    return {
+        "id": f"generated-example-repo-{suffix}",
+        "source_repo_url": "https://github.com/example/repo",
+        "source_license": "MIT",
+        "source_commit": "1111111111111111111111111111111111111111",
+        "parent_commit": "0000000000000000000000000000000000000000",
+        "data_split": "DEV",
+        "changed_paths": ["src/parser.py"],
+        "teacher_model_id": "ollama/qwen2.5-coder:7b",
+        "teacher_runtime": "ollama",
+        "teacher_runtime_model_id": "qwen2.5-coder:7b",
+        "teacher_revision": "dae161e27b0e",
+        "teacher_license": "Apache-2.0",
+        "teacher_size": "4.7 GB",
+        "teacher_context_length": "32K",
+        "prompt_version": "commit-message-teacher-v0.1",
+        "decoding_config": {"temperature": 0.0},
+        "generation_timestamp": "2026-06-18T04:11:54Z",
+        "header": header,
+        "body": [],
+        "footers": [],
+        "type": header.split(":", 1)[0].split("(", 1)[0],
+        "scope": "parser",
+        "confidence": 1.0,
+        "warnings": [],
+        "evidence_paths": ["src/parser.py"],
+        "parser_result": {"errors": parser_errors or []},
+        "verifier_score": verifier_score,
+        "human_review_status": "not_reviewed",
     }
 
 
@@ -508,6 +548,65 @@ class DataArtifactTests(unittest.TestCase):
             self.assertEqual(summary["artifact_name"], "pilot")
             self.assertEqual(summary["generated_label_records"], 1)
             self.assertEqual(summary["needs_review"], 1)
+
+    def test_applies_generated_label_review_policy_to_pending_records(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "artifacts/teacher").mkdir(parents=True)
+            (root / "reviews").mkdir()
+            labels = [
+                _generated_label("perfect", verifier_score=1.0, parser_errors=[]),
+                _generated_label(
+                    "long-subject",
+                    header=(
+                        "feat(parser): add a very long subject that should stay out "
+                        "of the proof artifact"
+                    ),
+                    verifier_score=0.6666666666666666,
+                    parser_errors=["subject length is outside the configured limit"],
+                ),
+            ]
+            (root / "artifacts/teacher/generated-labels.pilot.jsonl").write_text(
+                "\n".join(json.dumps(label) for label in labels) + "\n",
+                encoding="utf-8",
+            )
+            create_named_generated_label_review_template(
+                root,
+                artifact_name="pilot",
+                reviewer="reviewer@example.com",
+            )
+
+            dry_summary = apply_generated_label_review_policy(
+                root,
+                artifact_name="pilot",
+                reviewer="reviewer@example.com",
+            )
+            dry_review = validate_named_generated_label_review(root, artifact_name="pilot")
+            self.assertEqual(dry_summary["accept"], 1)
+            self.assertEqual(dry_summary["reject"], 1)
+            self.assertEqual(dry_review["needs_review"], 2)
+
+            summary = apply_generated_label_review_policy(
+                root,
+                artifact_name="pilot",
+                reviewer="reviewer@example.com",
+                review_timestamp="2026-06-23T00:00:00Z",
+                write=True,
+            )
+            review_summary = validate_named_generated_label_review(root, artifact_name="pilot")
+            reviews = [
+                json.loads(line)
+                for line in (
+                    root / "reviews/generated-labels.pilot.review.jsonl"
+                ).read_text().splitlines()
+            ]
+
+            self.assertEqual(summary["accept"], 1)
+            self.assertEqual(summary["reject"], 1)
+            self.assertEqual(review_summary["needs_review"], 0)
+            self.assertEqual(reviews[0]["decision"], "accept")
+            self.assertEqual(reviews[1]["decision"], "reject")
+            self.assertIn("subject_issue", reviews[1]["issues"])
 
     def test_review_validation_rejects_missing_decision(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

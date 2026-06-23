@@ -14,6 +14,9 @@ SMOKE_JSONL = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.jsonl
 PILOT_REPORT = $(GITCTX_DATA_DIR)/artifacts/$(PILOT_ARTIFACT)/source-diffs.$(PILOT_ARTIFACT).report.json
 PILOT_JSONL = $(GITCTX_DATA_DIR)/artifacts/$(PILOT_ARTIFACT)/source-diffs.$(PILOT_ARTIFACT).jsonl
 REVIEWER ?= reviewer@example.com
+REVIEW_TIMESTAMP ?= TBD
+WRITE ?= 0
+WRITE_FLAG = $(if $(filter 1 true yes,$(WRITE)),--write)
 OLLAMA_NUM_CTX ?= 8192
 OLLAMA_NUM_PREDICT ?= 1024
 OLLAMA_PROGRESS_EVERY ?= 25
@@ -29,7 +32,7 @@ NEURAL_EPOCHS ?= 25
 NEURAL_LEARNING_RATE ?= 0.35
 NEURAL_L2 ?= 0.0001
 
-.PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-policy pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-source-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check artifact-eval-baseline artifact-split-inspection training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
+.PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-policy pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-source-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-policy pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check artifact-eval-baseline artifact-split-inspection training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -147,6 +150,13 @@ generated-review-check:
 
 pilot-generated-review-template:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" create-named-generated-label-review-template --artifact-name "$(PILOT_ARTIFACT)" --reviewer "$(REVIEWER)"
+
+pilot-generated-review-policy:
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" apply-generated-label-review-policy \
+		--artifact-name "$(PILOT_ARTIFACT)" \
+		--reviewer "$(REVIEWER)" \
+		--review-timestamp "$(REVIEW_TIMESTAMP)" \
+		$(WRITE_FLAG)
 
 pilot-generated-review-check:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate-named-generated-label-review --artifact-name "$(PILOT_ARTIFACT)"

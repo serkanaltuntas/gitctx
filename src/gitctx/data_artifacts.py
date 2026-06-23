@@ -31,6 +31,7 @@ CHECKSUMS = Path("checksums/sha256.txt")
 REVIEW_PROTOCOL = "source-diff-smoke-review-v0.1"
 GENERATED_LABEL_REVIEW_PROTOCOL = "generated-label-smoke-review-v0.1"
 SOURCE_REVIEW_POLICY_VERSION = "source-review-policy-v0.1"
+GENERATED_LABEL_REVIEW_POLICY_VERSION = "generated-label-review-policy-v0.1"
 _NOISE_SUBJECT_RE = re.compile(
     r"\b(merge|revert|release|bump|deps?|dependenc|changelog|change log|"
     r"pre-commit|version)\b",
@@ -555,6 +556,86 @@ def validate_named_generated_label_review(
     return summary
 
 
+def apply_generated_label_review_policy(
+    data_dir: str | Path,
+    *,
+    artifact_name: str,
+    reviewer: str,
+    review_timestamp: str = "TBD",
+    overwrite_reviewed: bool = False,
+    write: bool = False,
+) -> dict[str, int]:
+    """Fill generated-label review decisions with a deterministic conservative policy."""
+
+    data_dir = Path(data_dir)
+    generated_labels = load_jsonl(data_dir / generated_labels_path(artifact_name))
+    review_path = data_dir / generated_label_review_path(artifact_name)
+    review_records = load_jsonl(review_path)
+    labels_by_id = {record["id"]: record for record in generated_labels}
+    updated_records = []
+    decision_counts: Counter[str] = Counter()
+    issue_counts: Counter[str] = Counter()
+    split_decision_counts: Counter[tuple[str, str]] = Counter()
+    changed_records = 0
+    preserved_records = 0
+
+    for review in review_records:
+        label = labels_by_id.get(review.get("generated_label_id"))
+        if label is None:
+            updated_records.append(review)
+            decision = str(review.get("decision"))
+            decision_counts[decision] += 1
+            preserved_records += 1
+            continue
+        if review.get("decision") != "needs_review" and not overwrite_reviewed:
+            updated_records.append(review)
+            decision = str(review.get("decision"))
+            decision_counts[decision] += 1
+            split_decision_counts[(str(label.get("data_split")), decision)] += 1
+            preserved_records += 1
+            continue
+
+        decision, issues, notes = _generated_label_review_policy_decision(label)
+        updated = dict(review)
+        updated["decision"] = decision
+        updated["issues"] = issues
+        updated["notes"] = notes
+        updated["reviewer"] = reviewer
+        updated["review_timestamp"] = review_timestamp
+        updated_records.append(updated)
+        decision_counts[decision] += 1
+        split_decision_counts[(str(label.get("data_split")), decision)] += 1
+        issue_counts.update(issues)
+        changed_records += 1
+
+    if write:
+        review_path.write_text(
+            "\n".join(json.dumps(record, sort_keys=True) for record in updated_records) + "\n",
+            encoding="utf-8",
+        )
+
+    summary = {
+        "artifact_name": artifact_name,
+        "generated_label_records": len(generated_labels),
+        "review_records": len(review_records),
+        "changed_records": changed_records,
+        "preserved_records": preserved_records,
+        "needs_review": decision_counts["needs_review"],
+        "accept": decision_counts["accept"],
+        "edit": decision_counts["edit"],
+        "reject": decision_counts["reject"],
+    }
+    for key, value in summary.items():
+        print(key, value)
+    for (split, decision), count in sorted(split_decision_counts.items()):
+        print(f"split_{split}_{decision}", count)
+    for issue, count in sorted(issue_counts.items()):
+        print(f"issue_{issue}", count)
+    if not write:
+        print("dry_run", True)
+    return summary
+
+
 def write_checksums(data_dir: str | Path) -> Path:
     """Write sha256 checksums for tracked smoke lineage files."""
 
@@ -629,6 +710,46 @@ def _source_review_policy_decision(record: dict[str, Any]) -> tuple[str, list[st
 
 def _reject(reason: str, note: str) -> tuple[str, list[str], str]:
     return "rejected", [reason], f"{SOURCE_REVIEW_POLICY_VERSION}; {note}"
+
+
+def _generated_label_review_policy_decision(label: dict[str, Any]) -> tuple[str, list[str], str]:
+    parser_result = label.get("parser_result")
+    errors = []
+    if isinstance(parser_result, dict):
+        errors = [error for error in parser_result.get("errors", []) if isinstance(error, str)]
+    verifier_score = label.get("verifier_score")
+    if verifier_score == 1.0 and not errors:
+        return (
+            "accept",
+            [],
+            f"{GENERATED_LABEL_REVIEW_POLICY_VERSION}; verifier_score=1.0 with no parser errors.",
+        )
+
+    issues = _generated_label_review_policy_issues(errors, verifier_score)
+    return (
+        "reject",
+        issues,
+        f"{GENERATED_LABEL_REVIEW_POLICY_VERSION}; conservative reject for non-perfect verifier signal.",
+    )
+
+
+def _generated_label_review_policy_issues(
+    errors: list[str],
+    verifier_score: Any,
+) -> list[str]:
+    issues: set[str] = set()
+    for error in errors:
+        if "scope" in error:
+            issues.add("scope_issue")
+        if "type" in error:
+            issues.add("type_issue")
+        if "subject" in error or "length" in error or "vague" in error:
+            issues.add("subject_issue")
+        if "invalid Conventional Commit" in error or "unknown type" in error:
+            issues.add("invalid_format")
+    if not isinstance(verifier_score, (int, float)) or verifier_score < 1.0:
+        issues.add("evidence_issue")
+    return sorted(issues or {"factual_issue"})
 
 
 def _diff_stat_counts(diff_stat: str, changed_paths: list[str]) -> tuple[int, int, int]:
@@ -741,6 +862,12 @@ def main(argv: list[str] | None = None) -> int:
     named_generated_review_template.add_argument("--overwrite", action="store_true")
     named_generated_review_check = subparsers.add_parser("validate-named-generated-label-review")
     named_generated_review_check.add_argument("--artifact-name", required=True)
+    generated_review_policy = subparsers.add_parser("apply-generated-label-review-policy")
+    generated_review_policy.add_argument("--artifact-name", required=True)
+    generated_review_policy.add_argument("--reviewer", required=True)
+    generated_review_policy.add_argument("--review-timestamp", default="TBD")
+    generated_review_policy.add_argument("--overwrite-reviewed", action="store_true")
+    generated_review_policy.add_argument("--write", action="store_true")
     subparsers.add_parser("write-checksums")
     args = parser.parse_args(argv)
 
@@ -812,6 +939,15 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "validate-named-generated-label-review":
         validate_named_generated_label_review(args.data_dir, artifact_name=args.artifact_name)
+    elif args.command == "apply-generated-label-review-policy":
+        apply_generated_label_review_policy(
+            args.data_dir,
+            artifact_name=args.artifact_name,
+            reviewer=args.reviewer,
+            review_timestamp=args.review_timestamp,
+            overwrite_reviewed=args.overwrite_reviewed,
+            write=args.write,
+        )
     elif args.command == "write-checksums":
         print(write_checksums(args.data_dir))
     return 0
