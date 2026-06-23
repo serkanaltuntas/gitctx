@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable
 
-from gitctx.conventional import CommitContext, score_commit_message
+from gitctx.conventional import CommitContext, parse_commit_message, score_commit_message
 from gitctx.provenance import (
     load_jsonl,
     validate_generated_label_matches_input,
@@ -336,11 +336,32 @@ def _parse_teacher_json(raw_content: str) -> dict[str, Any]:
     first = content.find("{")
     last = content.rfind("}")
     if first == -1 or last == -1 or last < first:
-        raise ValueError("teacher output did not contain a JSON object")
+        return _parse_plain_commit_candidate(content)
     value = json.loads(content[first : last + 1])
     if not isinstance(value, dict):
         raise ValueError("teacher output JSON must be an object")
     return value
+
+
+def _parse_plain_commit_candidate(content: str) -> dict[str, Any]:
+    """Recover the common teacher failure mode: plain Conventional Commit text."""
+
+    try:
+        parsed = parse_commit_message(content)
+    except ValueError as exc:
+        raise ValueError("teacher output did not contain a JSON object") from exc
+    return {
+        "header": content.splitlines()[0],
+        "body": list(parsed.body),
+        "footers": list(parsed.footers),
+        "type": parsed.type,
+        "scope": parsed.scope,
+        "confidence": 0.5,
+        "warnings": [
+            "teacher output was plain Conventional Commit text; normalized to JSON candidate"
+        ],
+        "evidence_paths": [],
+    }
 
 
 def _build_generated_label(
@@ -349,9 +370,9 @@ def _build_generated_label(
     candidate: dict[str, Any],
 ) -> dict[str, Any]:
     header = _require_candidate_str(candidate, "header")
-    body = _require_candidate_list(candidate, "body")
-    footers = _require_candidate_list(candidate, "footers")
-    warnings = _require_candidate_list(candidate, "warnings")
+    body = _require_candidate_list(candidate, "body", allow_string=True)
+    footers = _require_candidate_list(candidate, "footers", allow_string=True)
+    warnings = _require_candidate_list(candidate, "warnings", allow_string=True)
     evidence_paths, evidence_warnings = _sanitize_evidence_paths(
         _require_candidate_list(candidate, "evidence_paths"),
         teacher_input["changed_paths"],
@@ -415,8 +436,15 @@ def _require_candidate_str(candidate: dict[str, Any], key: str) -> str:
     return value
 
 
-def _require_candidate_list(candidate: dict[str, Any], key: str) -> list[str]:
+def _require_candidate_list(
+    candidate: dict[str, Any],
+    key: str,
+    *,
+    allow_string: bool = False,
+) -> list[str]:
     value = candidate.get(key)
+    if allow_string and isinstance(value, str):
+        return [line.strip() for line in value.splitlines() if line.strip()]
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ValueError(f"teacher output {key} must be a list of strings")
     return value

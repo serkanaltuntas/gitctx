@@ -176,6 +176,57 @@ class OllamaGenerateTests(unittest.TestCase):
                 label["warnings"],
             )
 
+    def test_string_footers_are_normalized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root)
+            server, thread = self._start_fake_ollama(footers="Refs: #123")
+            try:
+                generate_smoke_labels(
+                    root,
+                    ollama_url=f"http://127.0.0.1:{server.server_port}",
+                    resume=False,
+                )
+                validate_smoke_generated_labels(root)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+            label = json.loads(
+                (root / "artifacts/teacher/generated-labels.smoke.jsonl").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(label["footers"], ["Refs: #123"])
+
+    def test_plain_conventional_commit_output_is_normalized(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_teacher_inputs(root)
+            server, thread = self._start_fake_ollama(
+                raw_content="fix(parser): handle empty values"
+            )
+            try:
+                generate_smoke_labels(
+                    root,
+                    ollama_url=f"http://127.0.0.1:{server.server_port}",
+                    resume=False,
+                )
+                validate_smoke_generated_labels(root)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+            label = json.loads(
+                (root / "artifacts/teacher/generated-labels.smoke.jsonl").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(label["header"], "fix(parser): handle empty values")
+            self.assertIn("normalized to JSON candidate", label["warnings"][0])
+
     def _write_teacher_inputs(self, root: Path, *, artifact_name: str = "smoke") -> None:
         (root / "artifacts/teacher").mkdir(parents=True)
         record = {
@@ -217,27 +268,34 @@ class OllamaGenerateTests(unittest.TestCase):
         header: str = "fix(parser): handle empty values",
         scope: str = "parser",
         evidence_paths: Optional[list[str]] = None,
+        footers: object = None,
+        raw_content: Optional[str] = None,
     ) -> tuple[HTTPServer, Thread]:
         evidence_paths = evidence_paths or ["src/parser.py", "tests/test_parser.py"]
+        if footers is None:
+            footers = []
 
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self) -> None:  # noqa: N802 - stdlib callback.
                 length = int(self.headers["Content-Length"])
                 self.server.seen_payload = json.loads(self.rfile.read(length))  # type: ignore[attr-defined]
+                content = raw_content
+                if content is None:
+                    content = json.dumps(
+                        {
+                            "header": header,
+                            "body": [],
+                            "footers": footers,
+                            "type": "fix",
+                            "scope": scope,
+                            "confidence": 0.9,
+                            "warnings": [],
+                            "evidence_paths": evidence_paths,
+                        }
+                    )
                 payload = {
                     "message": {
-                        "content": json.dumps(
-                            {
-                                "header": header,
-                                "body": [],
-                                "footers": [],
-                                "type": "fix",
-                                "scope": scope,
-                                "confidence": 0.9,
-                                "warnings": [],
-                                "evidence_paths": evidence_paths,
-                            }
-                        )
+                        "content": content
                     }
                 }
                 body = json.dumps(payload).encode("utf-8")
