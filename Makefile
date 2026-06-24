@@ -8,6 +8,8 @@ PILOT_ARTIFACT ?= pilot
 DATA_SPLIT ?= REPORT
 SPLIT_PLAN ?=
 SPLIT_PLAN_FLAG = $(if $(SPLIT_PLAN),--split-plan "$(SPLIT_PLAN)")
+EXCLUDE_SOURCE_ARTIFACT ?=
+EXCLUDE_SOURCE_ARTIFACT_FLAG = $(if $(EXCLUDE_SOURCE_ARTIFACT),--exclude-source-artifact "$(EXCLUDE_SOURCE_ARTIFACT)")
 SOURCE_MANIFEST ?= manifests/source-manifest.audit.jsonl
 SMOKE_REPORT = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.report.json
 SMOKE_JSONL = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.jsonl
@@ -26,6 +28,8 @@ ALLOW_MISSING_LABELS ?= 0
 ALLOW_GENERATION_FAILURES_FLAG = $(if $(filter 1 true yes,$(ALLOW_GENERATION_FAILURES)),--allow-failures)
 ALLOW_MISSING_LABELS_FLAG = $(if $(filter 1 true yes,$(ALLOW_MISSING_LABELS)),--allow-missing)
 TRAIN_VERSION ?= v0
+MERGE_INPUT_ARTIFACTS ?=
+MERGE_INPUT_ARTIFACT_FLAGS = $(foreach artifact,$(MERGE_INPUT_ARTIFACTS),--input-artifact "$(artifact)")
 PROTOTYPE_MODEL_VERSION ?= path-type-v0
 NEURAL_MODEL_VERSION ?= tiny-softmax-v0
 NEURAL_EPOCHS ?= 25
@@ -36,7 +40,7 @@ PROOF_SPLIT_PLAN ?= manifests/split-plan.$(PILOT_ARTIFACT).json
 PROOF_WRITE ?= 1
 PROOF_WRITE_FLAG = $(if $(filter 1 true yes,$(PROOF_WRITE)),--write)
 
-.PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-policy pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-source-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-policy pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check artifact-eval-baseline artifact-split-inspection proof-readiness training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
+.PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-policy pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-source-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-policy pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check merge-train-artifact artifact-eval-baseline artifact-split-inspection proof-readiness training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -47,7 +51,8 @@ smoke: data-dir
 		--data-dir "$(GITCTX_DATA_DIR)" \
 		--records "$(SMOKE_RECORDS)" \
 		--artifact-name smoke \
-		$(SPLIT_PLAN_FLAG)
+		$(SPLIT_PLAN_FLAG) \
+		$(EXCLUDE_SOURCE_ARTIFACT_FLAG)
 
 smoke-check:
 	$(PYTHON) -m json.tool "$(SMOKE_REPORT)"
@@ -71,7 +76,8 @@ pilot-source: data-dir
 		--records "$(PILOT_RECORDS)" \
 		--per-repo-limit "$(PILOT_PER_REPO_LIMIT)" \
 		--artifact-name "$(PILOT_ARTIFACT)" \
-		$(SPLIT_PLAN_FLAG)
+		$(SPLIT_PLAN_FLAG) \
+		$(EXCLUDE_SOURCE_ARTIFACT_FLAG)
 
 pilot-source-check:
 	$(PYTHON) -m json.tool "$(PILOT_REPORT)"
@@ -175,6 +181,13 @@ pilot-train-artifact-check:
 	PYTHONPATH=src $(PYTHON) -m gitctx.train_artifacts --data-dir "$(GITCTX_DATA_DIR)" validate \
 		--artifact-name "$(PILOT_ARTIFACT)" \
 		--version "$(TRAIN_VERSION)"
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
+
+merge-train-artifact:
+	PYTHONPATH=src $(PYTHON) -m gitctx.train_artifacts --data-dir "$(GITCTX_DATA_DIR)" merge-inputs \
+		--artifact-name "$(PILOT_ARTIFACT)" \
+		--version "$(TRAIN_VERSION)" \
+		$(MERGE_INPUT_ARTIFACT_FLAGS)
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 artifact-eval-baseline:

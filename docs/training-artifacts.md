@@ -97,6 +97,35 @@ manifest linkage, and baseline availability. It does not fail the command when
 the artifact is not ready; use the report to decide whether to expand data or
 record a smaller private proof-run decision.
 
+## Expansion Artifacts
+
+When a proof-readiness report shows that a promoted artifact is below its
+training-record target, do not overwrite the original artifact. Create a new
+expansion artifact and exclude already extracted source ids:
+
+```bash
+make pilot-source \
+  PILOT_ARTIFACT=gctx1-dev2 \
+  SMOKE_MANIFEST="$GITCTX_DATA_DIR/manifests/source-manifest.gctx1.jsonl" \
+  SPLIT_PLAN="$GITCTX_DATA_DIR/manifests/split-plan.gctx1.json" \
+  EXCLUDE_SOURCE_ARTIFACT="$GITCTX_DATA_DIR/artifacts/gctx1/source-diffs.gctx1.jsonl"
+```
+
+After source review, teacher generation, generated-label review, and SFT
+artifact creation for the expansion artifact, merge reviewed artifact inputs
+into a new strict artifact:
+
+```bash
+make merge-train-artifact \
+  PILOT_ARTIFACT=gctx1-strict \
+  MERGE_INPUT_ARTIFACTS="gctx1 gctx1-dev2"
+```
+
+The merge command combines source diffs, teacher inputs, generated labels, and
+generated-label reviews, skips duplicate source/generated ids, and then builds a
+fresh reviewed SFT artifact. It keeps `gctx1` immutable and makes the strict
+artifact reproducible.
+
 For record-by-record split inspection:
 
 ```bash

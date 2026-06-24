@@ -14,7 +14,11 @@ from gitctx.provenance import (
     validate_source_diff_record,
     validate_source_manifest_entry,
 )
-from gitctx.source_extract import extract_source_diff_record, iter_candidate_commits
+from gitctx.source_extract import (
+    extract_source_diff_record,
+    iter_candidate_commits,
+    source_diff_record_id,
+)
 from gitctx.split_plan import load_split_plan
 
 
@@ -49,6 +53,7 @@ def run_source_extract(
     per_repo_limit: int,
     split: str = "DEV",
     split_plan_path: str | Path | None = None,
+    exclude_source_artifact_paths: list[str | Path] | None = None,
 ) -> dict[str, Any]:
     """Clone approved sources and emit a named source-diff artifact."""
 
@@ -65,8 +70,10 @@ def run_source_extract(
 
     manifest_entries = load_jsonl(manifest_path)
     split_plan = load_split_plan(split_plan_path) if split_plan_path else None
+    excluded_source_ids = _load_excluded_source_ids(exclude_source_artifact_paths or [])
     output_records: list[dict[str, Any]] = []
     repo_reports: list[dict[str, Any]] = []
+    skipped_existing_records = 0
     started = time.time()
 
     for entry in manifest_entries:
@@ -76,6 +83,7 @@ def run_source_extract(
             "source_revision": entry.get("source_revision"),
             "manifest_errors": list(manifest_errors),
             "records": 0,
+            "skipped_existing_records": 0,
             "errors": [],
         }
         repo_reports.append(repo_report)
@@ -94,6 +102,11 @@ def run_source_extract(
             for commit in commits:
                 if len(output_records) >= records:
                     break
+                candidate_id = source_diff_record_id(entry["repo_url"], commit)
+                if candidate_id in excluded_source_ids:
+                    repo_report["skipped_existing_records"] += 1
+                    skipped_existing_records += 1
+                    continue
                 record = extract_source_diff_record(
                     repo_path,
                     entry,
@@ -124,14 +137,31 @@ def run_source_extract(
         "output_path": str(output_path),
         "requested_records": records,
         "written_records": len(output_records),
+        "skipped_existing_records": skipped_existing_records,
         "split": split,
         "split_plan_path": str(split_plan_path) if split_plan_path else None,
+        "exclude_source_artifact_paths": [
+            str(path) for path in (exclude_source_artifact_paths or [])
+        ],
         "artifact_name": artifact_name,
         "repo_reports": repo_reports,
         "duration_seconds": round(time.time() - started, 3),
     }
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return report
+
+
+def _load_excluded_source_ids(paths: list[str | Path]) -> set[str]:
+    excluded: set[str] = set()
+    for path in paths:
+        artifact_path = Path(path)
+        if not artifact_path.exists():
+            raise FileNotFoundError(f"exclude source artifact not found: {artifact_path}")
+        for record in load_jsonl(artifact_path):
+            record_id = record.get("id")
+            if isinstance(record_id, str):
+                excluded.add(record_id)
+    return excluded
 
 
 def ensure_clone(repo_path: Path, repo_url: str) -> None:
@@ -189,6 +219,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--split", default="DEV")
     parser.add_argument("--split-plan", type=Path)
     parser.add_argument("--artifact-name", default="smoke")
+    parser.add_argument(
+        "--exclude-source-artifact",
+        action="append",
+        default=[],
+        help="Existing source-diff JSONL whose ids should be skipped.",
+    )
     args = parser.parse_args(argv)
 
     report = run_source_extract(
@@ -199,6 +235,7 @@ def main(argv: list[str] | None = None) -> int:
         per_repo_limit=args.per_repo_limit,
         split=args.split,
         split_plan_path=args.split_plan,
+        exclude_source_artifact_paths=args.exclude_source_artifact,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["written_records"] else 1

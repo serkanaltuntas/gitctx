@@ -9,6 +9,7 @@ from pathlib import Path
 from gitctx.train_artifacts import (
     create_training_artifact,
     format_commit_message,
+    merge_training_artifact_inputs,
     validate_training_artifact,
 )
 
@@ -57,14 +58,57 @@ class TrainArtifactTests(unittest.TestCase):
             "Refs: #12",
         )
 
-    def _write_artifact_inputs(self, root: Path, *, include_needs_review: bool = False) -> None:
-        (root / "artifacts/pilot").mkdir(parents=True)
-        (root / "artifacts/teacher").mkdir(parents=True)
-        (root / "reviews").mkdir(parents=True)
+    def test_merges_reviewed_artifact_inputs_and_skips_duplicates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact_inputs(root, artifact_name="base")
+            self._write_artifact_inputs(
+                root,
+                artifact_name="extra",
+                suffixes=("111111111111", "444444444444", "555555555555"),
+            )
+
+            report = merge_training_artifact_inputs(
+                root,
+                input_artifact_names=["base", "extra"],
+                output_artifact_name="combined",
+            )
+            summary = validate_training_artifact(root, artifact_name="combined")
+            records = self._load_jsonl(root / "artifacts/train/sft.combined.v0.jsonl")
+
+            self.assertEqual(report["training_records"], 3)
+            self.assertEqual(summary["training_records"], 3)
+            self.assertEqual(report["source_diffs"]["skipped_duplicate_records"], 1)
+            self.assertEqual(report["generated_label_reviews"]["skipped_duplicate_records"], 1)
+            self.assertEqual({record["artifact_name"] for record in records}, {"combined"})
+            self.assertEqual(
+                {record["source_diff_id"] for record in records},
+                {
+                    "example-repo-111111111111",
+                    "example-repo-222222222222",
+                    "example-repo-444444444444",
+                },
+            )
+
+    def _write_artifact_inputs(
+        self,
+        root: Path,
+        *,
+        artifact_name: str = "pilot",
+        include_needs_review: bool = False,
+        suffixes: tuple[str, str, str] = (
+            "111111111111",
+            "222222222222",
+            "333333333333",
+        ),
+    ) -> None:
+        (root / f"artifacts/{artifact_name}").mkdir(parents=True, exist_ok=True)
+        (root / "artifacts/teacher").mkdir(parents=True, exist_ok=True)
+        (root / "reviews").mkdir(parents=True, exist_ok=True)
         source_records = [
-            self._source_record("111111111111", historical_subject="fix parser"),
-            self._source_record("222222222222", historical_subject="fix blank input"),
-            self._source_record("333333333333", historical_subject="refactor parser"),
+            self._source_record(suffixes[0], historical_subject="fix parser"),
+            self._source_record(suffixes[1], historical_subject="fix blank input"),
+            self._source_record(suffixes[2], historical_subject="refactor parser"),
         ]
         if include_needs_review:
             source_records.append(self._source_record("444444444444", historical_subject="docs"))
@@ -106,10 +150,22 @@ class TrainArtifactTests(unittest.TestCase):
             )
             review_records.append(self._review(generated_labels[3], decision="needs_review"))
 
-        self._write_jsonl(root / "artifacts/pilot/source-diffs.pilot.jsonl", source_records)
-        self._write_jsonl(root / "artifacts/teacher/teacher-inputs.pilot.jsonl", teacher_inputs)
-        self._write_jsonl(root / "artifacts/teacher/generated-labels.pilot.jsonl", generated_labels)
-        self._write_jsonl(root / "reviews/generated-labels.pilot.review.jsonl", review_records)
+        self._write_jsonl(
+            root / f"artifacts/{artifact_name}/source-diffs.{artifact_name}.jsonl",
+            source_records,
+        )
+        self._write_jsonl(
+            root / f"artifacts/teacher/teacher-inputs.{artifact_name}.jsonl",
+            teacher_inputs,
+        )
+        self._write_jsonl(
+            root / f"artifacts/teacher/generated-labels.{artifact_name}.jsonl",
+            generated_labels,
+        )
+        self._write_jsonl(
+            root / f"reviews/generated-labels.{artifact_name}.review.jsonl",
+            review_records,
+        )
 
     def _source_record(self, suffix: str, *, historical_subject: str) -> dict[str, object]:
         commit = suffix.ljust(40, "1")

@@ -197,6 +197,74 @@ class WorkerSmokeTests(unittest.TestCase):
             records = load_jsonl(report["output_path"])
             self.assertEqual(records[0]["data_split"], "REPORT")
 
+    def test_run_source_extract_can_skip_existing_source_artifact_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = root / "remote"
+            work = root / "work"
+            data_dir = root / "data"
+            remote.mkdir()
+            work.mkdir()
+            _git(remote, "init", "--bare")
+            _git(work, "init")
+            _git(work, "config", "user.email", "test@example.com")
+            _git(work, "config", "user.name", "Test User")
+            _git(work, "remote", "add", "origin", str(remote))
+
+            (work / "parser.py").write_text("value = 1\n", encoding="utf-8")
+            _git(work, "add", "parser.py")
+            _git(work, "commit", "-m", "chore: initial parser")
+            (work / "parser.py").write_text("value = 2\n", encoding="utf-8")
+            _git(work, "commit", "-am", "fix(parser): update first value")
+            first_change = _git(work, "rev-parse", "HEAD")
+            (work / "parser.py").write_text("value = 3\n", encoding="utf-8")
+            _git(work, "commit", "-am", "fix(parser): update second value")
+            revision = _git(work, "rev-parse", "HEAD")
+            _git(work, "push", "origin", "HEAD:main")
+
+            manifest = root / "manifest.jsonl"
+            manifest.write_text(
+                "{"
+                "\"repo_url\":\"https://github.com/example/repo\","
+                f"\"clone_url\":\"{remote}\","
+                "\"default_branch\":\"main\","
+                "\"source_license\":\"MIT\","
+                f"\"license_url\":\"https://example.com/license\","
+                "\"license_review_date\":\"2026-06-17\","
+                "\"reviewer\":\"Test User\","
+                "\"review_status\":\"approved_for_audit\","
+                f"\"source_revision\":\"{revision}\","
+                "\"allowed_splits\":[\"DEV\"],"
+                "\"exclude_globs\":[\"vendor/**\"],"
+                "\"notes\":\"test fixture\""
+                "}\n",
+                encoding="utf-8",
+            )
+            existing_artifact = root / "existing.jsonl"
+            existing_artifact.write_text(
+                json.dumps(
+                    {
+                        "id": f"example-repo-{revision[:12]}",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            report = run_source_extract(
+                manifest,
+                data_dir,
+                artifact_name="expansion",
+                records=5,
+                per_repo_limit=5,
+                exclude_source_artifact_paths=[existing_artifact],
+            )
+
+            records = load_jsonl(report["output_path"])
+            self.assertEqual(report["skipped_existing_records"], 1)
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["source_commit"], first_change)
+
 
 def _git(repo: Path, *args: str) -> str:
     completed = subprocess.run(

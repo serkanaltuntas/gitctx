@@ -45,6 +45,14 @@ def training_report_path(artifact_name: str, *, version: str = "v0") -> Path:
     return TRAIN_ARTIFACT_DIR / f"sft.{artifact_name}.{version}.report.json"
 
 
+def training_input_merge_report_path(artifact_name: str, *, version: str = "v0") -> Path:
+    """Return the training-input merge report path for a named artifact."""
+
+    _validate_artifact_name(artifact_name)
+    _validate_version(version)
+    return TRAIN_ARTIFACT_DIR / f"sft.{artifact_name}.{version}.input-merge.report.json"
+
+
 def create_training_artifact(
     data_dir: str | Path,
     *,
@@ -170,6 +178,79 @@ def create_training_artifact(
     return report
 
 
+def merge_training_artifact_inputs(
+    data_dir: str | Path,
+    *,
+    input_artifact_names: list[str],
+    output_artifact_name: str,
+    version: str = "v0",
+) -> dict[str, Any]:
+    """Merge reviewed artifact inputs, then build one combined SFT artifact."""
+
+    if len(input_artifact_names) < 2:
+        raise ValueError("at least two input artifacts are required")
+    _validate_artifact_name(output_artifact_name)
+    _validate_version(version)
+    for artifact_name in input_artifact_names:
+        _validate_artifact_name(artifact_name)
+    if output_artifact_name in set(input_artifact_names):
+        raise ValueError("output artifact must be distinct from input artifacts")
+
+    data_dir = Path(data_dir)
+    source_report = _merge_jsonl_inputs(
+        data_dir,
+        input_artifact_names=input_artifact_names,
+        output_path=source_diffs_path(output_artifact_name),
+        input_path_fn=source_diffs_path,
+        primary_key="id",
+    )
+    teacher_input_report = _merge_jsonl_inputs(
+        data_dir,
+        input_artifact_names=input_artifact_names,
+        output_path=teacher_inputs_path(output_artifact_name),
+        input_path_fn=teacher_inputs_path,
+        primary_key="id",
+        secondary_key="source_diff_id",
+    )
+    generated_label_report = _merge_jsonl_inputs(
+        data_dir,
+        input_artifact_names=input_artifact_names,
+        output_path=generated_labels_path(output_artifact_name),
+        input_path_fn=generated_labels_path,
+        primary_key="id",
+    )
+    generated_review_report = _merge_jsonl_inputs(
+        data_dir,
+        input_artifact_names=input_artifact_names,
+        output_path=generated_label_review_path(output_artifact_name),
+        input_path_fn=generated_label_review_path,
+        primary_key="id",
+        secondary_key="generated_label_id",
+    )
+    training_report = create_training_artifact(
+        data_dir,
+        artifact_name=output_artifact_name,
+        version=version,
+    )
+    report = {
+        "artifact_name": output_artifact_name,
+        "artifact_version": version,
+        "input_artifacts": input_artifact_names,
+        "source_diffs": source_report,
+        "teacher_inputs": teacher_input_report,
+        "generated_labels": generated_label_report,
+        "generated_label_reviews": generated_review_report,
+        "training_records": training_report["training_records"],
+        "output_path": str(training_examples_path(output_artifact_name, version=version)),
+        "report_path": str(training_input_merge_report_path(output_artifact_name, version=version)),
+    }
+    report_path = data_dir / training_input_merge_report_path(output_artifact_name, version=version)
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    for key in ("artifact_name", "artifact_version", "training_records"):
+        print(key, report[key])
+    return report
+
+
 def validate_training_artifact(
     data_dir: str | Path,
     *,
@@ -259,6 +340,53 @@ def validate_training_artifact(
     for key, value in summary.items():
         print(key, value)
     return summary
+
+
+def _merge_jsonl_inputs(
+    data_dir: Path,
+    *,
+    input_artifact_names: list[str],
+    output_path: Path,
+    input_path_fn: Any,
+    primary_key: str,
+    secondary_key: str | None = None,
+) -> dict[str, Any]:
+    output_records: list[dict[str, Any]] = []
+    seen_primary: set[str] = set()
+    seen_secondary: set[str] = set()
+    input_counts: dict[str, int] = {}
+    skipped_duplicate_records = 0
+
+    for artifact_name in input_artifact_names:
+        records = load_jsonl(data_dir / input_path_fn(artifact_name))
+        input_counts[artifact_name] = len(records)
+        for record in records:
+            primary_value = record.get(primary_key)
+            secondary_value = record.get(secondary_key) if secondary_key else None
+            if not isinstance(primary_value, str):
+                raise ValueError(f"record missing string {primary_key}: {record.get('id')}")
+            if primary_value in seen_primary or (
+                isinstance(secondary_value, str) and secondary_value in seen_secondary
+            ):
+                skipped_duplicate_records += 1
+                continue
+            seen_primary.add(primary_value)
+            if isinstance(secondary_value, str):
+                seen_secondary.add(secondary_value)
+            output_records.append(record)
+
+    destination = data_dir / output_path
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        "".join(json.dumps(record, sort_keys=True) + "\n" for record in output_records),
+        encoding="utf-8",
+    )
+    return {
+        "input_records": input_counts,
+        "output_records": len(output_records),
+        "skipped_duplicate_records": skipped_duplicate_records,
+        "output_path": str(output_path),
+    }
 
 
 def validate_training_record(record: dict[str, Any]) -> tuple[str, ...]:
@@ -521,6 +649,10 @@ def main(argv: list[str] | None = None) -> int:
     validate = subparsers.add_parser("validate")
     validate.add_argument("--artifact-name", required=True)
     validate.add_argument("--version", default="v0")
+    merge = subparsers.add_parser("merge-inputs")
+    merge.add_argument("--artifact-name", required=True)
+    merge.add_argument("--version", default="v0")
+    merge.add_argument("--input-artifact", action="append", required=True)
     args = parser.parse_args(argv)
 
     if args.command == "create":
@@ -533,6 +665,13 @@ def main(argv: list[str] | None = None) -> int:
         validate_training_artifact(
             args.data_dir,
             artifact_name=args.artifact_name,
+            version=args.version,
+        )
+    elif args.command == "merge-inputs":
+        merge_training_artifact_inputs(
+            args.data_dir,
+            input_artifact_names=args.input_artifact,
+            output_artifact_name=args.artifact_name,
             version=args.version,
         )
     return 0

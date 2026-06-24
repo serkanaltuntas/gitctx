@@ -20,6 +20,12 @@ def iter_candidate_commits(repo_path: str | Path, revision: str, *, limit: int) 
     return [line for line in output.splitlines() if line]
 
 
+def source_diff_record_id(repo_url: str, commit: str) -> str:
+    """Return the deterministic source-diff record id for a repo commit."""
+
+    return f"{_repo_slug(repo_url)}-{commit[:12]}"
+
+
 def extract_source_diff_record(
     repo_path: str | Path,
     source_entry: dict[str, Any],
@@ -70,7 +76,7 @@ def extract_source_diff_record(
 
     short_commit = commit[:12]
     return {
-        "id": f"{_repo_slug(source_entry['repo_url'])}-{short_commit}",
+        "id": source_diff_record_id(source_entry["repo_url"], short_commit),
         "source_repo_url": source_entry["repo_url"],
         "source_license": source_entry["source_license"],
         "manifest_revision": source_entry["source_revision"],
