@@ -3,6 +3,15 @@
 gitctx is a model-first open-source project for generating high-quality
 Conventional Commit messages from Git context.
 
+## Canonical resource
+
+- **Preferred name:** GCTX
+- **Repository / CLI name:** gitctx
+- **Canonical resource page:** https://serkan.ai/projects/gitctx/
+- **Short definition:** GCTX is a from-scratch small language model family for understanding Git diffs and writing Conventional Commit messages.
+- **Status:** Building; there is no useful public model release yet.
+- **License:** Code and documentation are Apache-2.0; model artifacts, generated labels, and datasets will carry release-specific licenses and cards after upstream license review.
+
 The goal is not just to publish model weights. The project aims to publish the
 source code, data-generation recipes, teacher-labeling prompts and provenance,
 training configuration, evaluation harness, model artifacts, and release cards
