@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -197,6 +198,131 @@ class WorkerSmokeTests(unittest.TestCase):
             records = load_jsonl(report["output_path"])
             self.assertEqual(records[0]["data_split"], "REPORT")
 
+    def test_run_source_extract_can_filter_allowed_data_splits(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = root / "remote"
+            work = root / "work"
+            data_dir = root / "data"
+            remote.mkdir()
+            work.mkdir()
+            _git(remote, "init", "--bare")
+            _git(work, "init")
+            _git(work, "config", "user.email", "test@example.com")
+            _git(work, "config", "user.name", "Test User")
+            _git(work, "remote", "add", "origin", str(remote))
+
+            (work / "parser.py").write_text("value = 1\n", encoding="utf-8")
+            _git(work, "add", "parser.py")
+            _git_with_env(
+                work,
+                {
+                    "GIT_AUTHOR_DATE": "2026-06-01T12:00:00+00:00",
+                    "GIT_COMMITTER_DATE": "2026-06-01T12:00:00+00:00",
+                },
+                "commit",
+                "-m",
+                "chore: initial parser",
+            )
+            (work / "parser.py").write_text("value = 2\n", encoding="utf-8")
+            _git_with_env(
+                work,
+                {
+                    "GIT_AUTHOR_DATE": "2026-06-02T12:00:00+00:00",
+                    "GIT_COMMITTER_DATE": "2026-06-02T12:00:00+00:00",
+                },
+                "commit",
+                "-am",
+                "fix(parser): report-window change",
+            )
+            (work / "parser.py").write_text("value = 3\n", encoding="utf-8")
+            _git_with_env(
+                work,
+                {
+                    "GIT_AUTHOR_DATE": "2026-06-03T12:00:00+00:00",
+                    "GIT_COMMITTER_DATE": "2026-06-03T12:00:00+00:00",
+                },
+                "commit",
+                "-am",
+                "fix(parser): dev-window change",
+            )
+            revision = _git(work, "rev-parse", "HEAD")
+            dev_change = revision
+            _git(work, "push", "origin", "HEAD:main")
+
+            manifest = root / "manifest.jsonl"
+            manifest.write_text(
+                "{"
+                "\"repo_url\":\"https://github.com/example/repo\","
+                f"\"clone_url\":\"{remote}\","
+                "\"default_branch\":\"main\","
+                "\"source_license\":\"MIT\","
+                f"\"license_url\":\"https://example.com/license\","
+                "\"license_review_date\":\"2026-06-17\","
+                "\"reviewer\":\"Test User\","
+                "\"review_status\":\"approved_for_audit\","
+                f"\"source_revision\":\"{revision}\","
+                "\"allowed_splits\":[\"DEV\",\"REPORT\"],"
+                "\"exclude_globs\":[\"vendor/**\"],"
+                "\"notes\":\"test fixture\""
+                "}\n",
+                encoding="utf-8",
+            )
+            split_plan = root / "split-plan.json"
+            split_plan.write_text(
+                json.dumps(
+                    {
+                        "id": "test-plan",
+                        "version": "v0",
+                        "created_at": "2026-06-19",
+                        "windows": [
+                            {
+                                "id": "dev-window-early",
+                                "repo_url": "https://github.com/example/repo",
+                                "split": "DEV",
+                                "start": "2026-06-01T00:00:00Z",
+                                "end": "2026-06-02T00:00:00Z",
+                                "reason": "test window",
+                            },
+                            {
+                                "id": "report-window",
+                                "repo_url": "https://github.com/example/repo",
+                                "split": "REPORT",
+                                "start": "2026-06-02T00:00:00Z",
+                                "end": "2026-06-03T00:00:00Z",
+                                "reason": "test window",
+                            },
+                            {
+                                "id": "dev-window-late",
+                                "repo_url": "https://github.com/example/repo",
+                                "split": "DEV",
+                                "start": "2026-06-03T00:00:00Z",
+                                "end": "2026-06-04T00:00:00Z",
+                                "reason": "test window",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = run_source_extract(
+                manifest,
+                data_dir,
+                artifact_name="devonly",
+                records=5,
+                per_repo_limit=5,
+                split_plan_path=split_plan,
+                allowed_data_splits={"DEV"},
+            )
+
+            records = load_jsonl(report["output_path"])
+            self.assertEqual(report["allowed_data_splits"], ["DEV"])
+            self.assertEqual(report["skipped_split_records"], 1)
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["source_commit"], dev_change)
+            self.assertEqual(records[0]["data_split"], "DEV")
+
     def test_run_source_extract_can_skip_existing_source_artifact_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -273,6 +399,18 @@ def _git(repo: Path, *args: str) -> str:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+    )
+    return completed.stdout.strip()
+
+
+def _git_with_env(repo: Path, env: dict[str, str], *args: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env={**os.environ, **env},
     )
     return completed.stdout.strip()
 

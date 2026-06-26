@@ -10,6 +10,8 @@ SPLIT_PLAN ?=
 SPLIT_PLAN_FLAG = $(if $(SPLIT_PLAN),--split-plan "$(SPLIT_PLAN)")
 EXCLUDE_SOURCE_ARTIFACT ?=
 EXCLUDE_SOURCE_ARTIFACT_FLAG = $(if $(EXCLUDE_SOURCE_ARTIFACT),--exclude-source-artifact "$(EXCLUDE_SOURCE_ARTIFACT)")
+ALLOWED_DATA_SPLITS ?=
+ALLOWED_DATA_SPLIT_FLAGS = $(foreach split,$(ALLOWED_DATA_SPLITS),--allowed-data-split "$(split)")
 SOURCE_MANIFEST ?= manifests/source-manifest.audit.jsonl
 SMOKE_REPORT = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.report.json
 SMOKE_JSONL = $(GITCTX_DATA_DIR)/artifacts/smoke/source-diffs.smoke.jsonl
@@ -52,7 +54,8 @@ smoke: data-dir
 		--records "$(SMOKE_RECORDS)" \
 		--artifact-name smoke \
 		$(SPLIT_PLAN_FLAG) \
-		$(EXCLUDE_SOURCE_ARTIFACT_FLAG)
+		$(EXCLUDE_SOURCE_ARTIFACT_FLAG) \
+		$(ALLOWED_DATA_SPLIT_FLAGS)
 
 smoke-check:
 	$(PYTHON) -m json.tool "$(SMOKE_REPORT)"
@@ -77,7 +80,8 @@ pilot-source: data-dir
 		--per-repo-limit "$(PILOT_PER_REPO_LIMIT)" \
 		--artifact-name "$(PILOT_ARTIFACT)" \
 		$(SPLIT_PLAN_FLAG) \
-		$(EXCLUDE_SOURCE_ARTIFACT_FLAG)
+		$(EXCLUDE_SOURCE_ARTIFACT_FLAG) \
+		$(ALLOWED_DATA_SPLIT_FLAGS)
 
 pilot-source-check:
 	$(PYTHON) -m json.tool "$(PILOT_REPORT)"

@@ -30,6 +30,7 @@ def run_smoke(
     per_repo_limit: int = 20,
     split: str = "DEV",
     split_plan_path: str | Path | None = None,
+    allowed_data_splits: set[str] | None = None,
 ) -> dict[str, Any]:
     """Clone approved sources and emit a source-diff smoke artifact."""
 
@@ -41,6 +42,7 @@ def run_smoke(
         per_repo_limit=per_repo_limit,
         split=split,
         split_plan_path=split_plan_path,
+        allowed_data_splits=allowed_data_splits,
     )
 
 
@@ -54,6 +56,7 @@ def run_source_extract(
     split: str = "DEV",
     split_plan_path: str | Path | None = None,
     exclude_source_artifact_paths: list[str | Path] | None = None,
+    allowed_data_splits: set[str] | None = None,
 ) -> dict[str, Any]:
     """Clone approved sources and emit a named source-diff artifact."""
 
@@ -71,9 +74,11 @@ def run_source_extract(
     manifest_entries = load_jsonl(manifest_path)
     split_plan = load_split_plan(split_plan_path) if split_plan_path else None
     excluded_source_ids = _load_excluded_source_ids(exclude_source_artifact_paths or [])
+    allowed_data_splits = set(allowed_data_splits or [])
     output_records: list[dict[str, Any]] = []
     repo_reports: list[dict[str, Any]] = []
     skipped_existing_records = 0
+    skipped_split_records = 0
     started = time.time()
 
     for entry in manifest_entries:
@@ -84,6 +89,7 @@ def run_source_extract(
             "manifest_errors": list(manifest_errors),
             "records": 0,
             "skipped_existing_records": 0,
+            "skipped_split_records": 0,
             "errors": [],
         }
         repo_reports.append(repo_report)
@@ -116,6 +122,10 @@ def run_source_extract(
                 )
                 if record is None:
                     continue
+                if allowed_data_splits and record["data_split"] not in allowed_data_splits:
+                    repo_report["skipped_split_records"] += 1
+                    skipped_split_records += 1
+                    continue
                 validation_errors = validate_source_diff_record(record)
                 if validation_errors:
                     repo_report["errors"].append(
@@ -138,8 +148,10 @@ def run_source_extract(
         "requested_records": records,
         "written_records": len(output_records),
         "skipped_existing_records": skipped_existing_records,
+        "skipped_split_records": skipped_split_records,
         "split": split,
         "split_plan_path": str(split_plan_path) if split_plan_path else None,
+        "allowed_data_splits": sorted(allowed_data_splits),
         "exclude_source_artifact_paths": [
             str(path) for path in (exclude_source_artifact_paths or [])
         ],
@@ -225,6 +237,12 @@ def main(argv: list[str] | None = None) -> int:
         default=[],
         help="Existing source-diff JSONL whose ids should be skipped.",
     )
+    parser.add_argument(
+        "--allowed-data-split",
+        action="append",
+        default=[],
+        help="Only write records assigned to this data split. Can be repeated.",
+    )
     args = parser.parse_args(argv)
 
     report = run_source_extract(
@@ -236,6 +254,7 @@ def main(argv: list[str] | None = None) -> int:
         split=args.split,
         split_plan_path=args.split_plan,
         exclude_source_artifact_paths=args.exclude_source_artifact,
+        allowed_data_splits=set(args.allowed_data_split),
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["written_records"] else 1
