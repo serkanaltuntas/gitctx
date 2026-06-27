@@ -146,6 +146,12 @@ class OllamaGenerateTests(unittest.TestCase):
             self.assertEqual(events[-1]["generated"], 1)
             self.assertEqual(events[-1]["failed"], 0)
             self.assertEqual(events[-1]["current_record_id"], "generated-example-repo-111111111111")
+            self.assertIn("elapsed_seconds", events[-1])
+            self.assertIn("records_per_second", events[-1])
+            self.assertIn("eta_seconds", events[-1])
+            self.assertGreaterEqual(events[-1]["elapsed_seconds"], 0.0)
+            self.assertGreaterEqual(events[-1]["records_per_second"], 0.0)
+            self.assertEqual(events[-1]["eta_seconds"], 0.0)
 
     def test_scope_only_parser_error_does_not_lower_verifier_score(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
+import time
 import urllib.error
 import urllib.request
 from typing import Any, Callable
@@ -83,12 +84,14 @@ def generate_labels(
     existing_records = _load_existing(output_path) if resume else []
     existing_ids = {record["id"] for record in existing_records}
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    started_at = time.monotonic()
     _report_generation_progress(
         processed=0,
         total=len(teacher_inputs),
         generated=0,
         skipped=0,
         failed=0,
+        started_at=started_at,
         force=True,
         progress_callback=progress_callback,
     )
@@ -107,6 +110,7 @@ def generate_labels(
                     generated=generated,
                     skipped=skipped,
                     failed=len(failures),
+                    started_at=started_at,
                     progress_every=progress_every,
                     current_record_id=output_id,
                     progress_callback=progress_callback,
@@ -142,6 +146,7 @@ def generate_labels(
                 generated=generated,
                 skipped=skipped,
                 failed=len(failures),
+                started_at=started_at,
                 progress_every=progress_every,
                 current_record_id=output_id,
                 progress_callback=progress_callback,
@@ -261,12 +266,24 @@ def _report_generation_progress(
     generated: int,
     skipped: int,
     failed: int,
+    started_at: float | None = None,
     progress_every: int = 25,
     current_record_id: str | None = None,
     force: bool = False,
     progress_callback: ProgressCallback | None = None,
 ) -> None:
     percent = 100.0 if total == 0 else processed / total * 100.0
+    elapsed_seconds = (
+        0.0 if started_at is None else max(0.0, time.monotonic() - started_at)
+    )
+    records_per_second = (
+        processed / elapsed_seconds if processed > 0 and elapsed_seconds > 0 else 0.0
+    )
+    eta_seconds = (
+        (total - processed) / records_per_second
+        if records_per_second > 0 and processed < total
+        else 0.0
+    )
     if not force and progress_every > 0 and processed != total and processed % progress_every != 0:
         return
     print(
@@ -275,7 +292,10 @@ def _report_generation_progress(
         f"({percent:.2f}%) "
         f"generated={generated} "
         f"skipped={skipped} "
-        f"failed={failed}",
+        f"failed={failed} "
+        f"elapsed={_format_duration(elapsed_seconds)} "
+        f"rate={records_per_second:.2f}/s "
+        f"eta={_format_duration(eta_seconds)}",
         flush=True,
     )
     if progress_callback is not None:
@@ -286,10 +306,24 @@ def _report_generation_progress(
             "skipped": skipped,
             "failed": failed,
             "percent": percent,
+            "elapsed_seconds": elapsed_seconds,
+            "records_per_second": records_per_second,
+            "eta_seconds": eta_seconds,
         }
         if current_record_id is not None:
             event["current_record_id"] = current_record_id
         progress_callback(event)
+
+
+def _format_duration(seconds: float) -> str:
+    total_seconds = max(0, int(round(seconds)))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h{minutes:02d}m{seconds:02d}s"
+    if minutes:
+        return f"{minutes}m{seconds:02d}s"
+    return f"{seconds}s"
 
 
 def _call_ollama(
