@@ -156,6 +156,24 @@ evaluated on `REPORT`. It should be used only to validate the training/eval
 pipeline. It is not a neural model, not a quality claim, and not a release
 candidate.
 
+The tiny-softmax smoke uses the same artifact contract with a dependency-free
+single-layer classifier:
+
+```bash
+make neural-smoke PILOT_ARTIFACT=next
+```
+
+For the current strict GCTX-1 proof artifact, run both smoke paths together:
+
+```bash
+make gctx1-proof-smoke
+make gctx1-proof-smoke-check
+```
+
+The current `gctx1-strict` smoke reports are useful for comparing type-match and
+format-validity plumbing on locked `REPORT`, but they are still not useful model
+quality evidence for release purposes.
+
 ## Release Gates
 
 | Gate | Requirement |

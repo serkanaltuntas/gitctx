@@ -19,10 +19,11 @@ needed for independent inspection and reproduction.
 
 ## Status
 
-The project has a private GCTX-1 proof artifact with reviewed training records,
-baseline reports, and smoke-model evals. The public repository contains the
-source code, schemas, prompts, runbooks, aggregate data cards, and output-use
-decisions needed to inspect the recipe.
+The project has a private `gctx1-strict` proof artifact that passes the GCTX-1
+data-readiness gate: 10,299 `DEV` training records, 1,627 locked `REPORT`
+records, and 1,295 reserved `HELD_OUT` candidates. The public repository
+contains the source code, schemas, prompts, runbooks, aggregate data cards, and
+output-use decisions needed to inspect the recipe.
 
 There is no useful public model release yet. The CLI shell comes later, after
 model behavior is measurable.
@@ -107,6 +108,10 @@ make pilot-train-artifact-check
 make pilot-eval-baseline
 make artifact-split-inspection PILOT_ARTIFACT=next DATA_SPLIT=REPORT
 make training-smoke PILOT_ARTIFACT=next
+make gctx1-proof-config-check
+make gctx1-proof-readiness
+make gctx1-proof-smoke
+make gctx1-proof-smoke-check
 ```
 
 For non-smoke artifacts that contain `REPORT` or `HELD_OUT` candidates, pass a
@@ -119,6 +124,7 @@ make pilot-source SPLIT_PLAN="/path/to/split-plan.json"
 See:
 
 - [docs/model-plan.md](docs/model-plan.md)
+- [configs/gctx1-proof-model.v0.json](configs/gctx1-proof-model.v0.json)
 - [docs/data-and-distillation.md](docs/data-and-distillation.md)
 - [docs/source-manifest.md](docs/source-manifest.md)
 - [docs/source-diff-review.md](docs/source-diff-review.md)

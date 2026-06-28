@@ -1,0 +1,48 @@
+{
+  "id": "gctx1-proof-model",
+  "version": "v0",
+  "status": "planned",
+  "purpose": "First GCTX-1 proof-model training run after the strict reviewed SFT data gate.",
+  "data": {
+    "artifact_name": "gctx1-strict",
+    "artifact_version": "v0",
+    "train_split": "DEV",
+    "eval_split": "REPORT",
+    "reserved_split": "HELD_OUT",
+    "minimum_dev_records": 10000,
+    "minimum_report_records": 1000,
+    "minimum_reserved_held_out_records": 1000
+  },
+  "model": {
+    "target_rung": "GCTX-1",
+    "target_parameter_range": "60M-100M",
+    "architecture": "decoder-only transformer",
+    "context_tokens": 8192,
+    "tokenizer": "code-and-diff-aware tokenizer, to be finalized before training",
+    "objective": "supervised fine-tuning on reviewed Conventional Commit examples"
+  },
+  "training": {
+    "precision": "bf16 or fp16 depending on target runtime",
+    "optimizer": "adamw",
+    "checkpoint_policy": "save resumable checkpoints and final model artifacts",
+    "reproducibility": "record seed, git revision, training code revision, dataset checksum, and runtime"
+  },
+  "evaluation": {
+    "locked_report_required": true,
+    "metrics": [
+      "format_validity",
+      "type_match",
+      "scope_quality",
+      "specificity",
+      "brevity",
+      "exact_message_match"
+    ],
+    "quality_claim_policy": "No public model-quality claim until a model card and eval card are written from locked REPORT results."
+  },
+  "release": {
+    "public_model_release": false,
+    "requires_model_card": true,
+    "requires_eval_card": true,
+    "requires_dataset_redistribution_review": true
+  }
+}

@@ -97,6 +97,31 @@ manifest linkage, and baseline availability. It does not fail the command when
 the artifact is not ready; use the report to decide whether to expand data or
 record a smaller private proof-run decision.
 
+The current GCTX-1 proof artifact is `gctx1-strict`. It is built by merging the
+reviewed GCTX expansion artifacts and rebuilding the reviewed SFT artifact from
+the merged source, teacher-input, generated-label, and generated-label-review
+records. Its proof-readiness report passes the GCTX-1 gate:
+
+| Field | Count |
+|---|---:|
+| Training records | 11,926 |
+| DEV training records | 10,299 |
+| REPORT records | 1,627 |
+| Reserved HELD_OUT candidates | 1,295 |
+
+Use the named strict proof targets for handoff:
+
+```bash
+make gctx1-proof-config-check
+make gctx1-proof-readiness
+make gctx1-proof-smoke
+make gctx1-proof-smoke-check
+```
+
+`gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
+models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M
+proof language-model run.
+
 ## Expansion Artifacts
 
 When a proof-readiness report shows that a promoted artifact is below its

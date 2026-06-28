@@ -2,12 +2,13 @@
 
 Status: approved for private proof-model training and pipeline validation; not
 approved for public dataset or model release.
-Date: 2026-06-23.
+Date: 2026-06-28.
 
 ## Decision
 
-The `gctx1-v0` reviewed SFT artifact may be used for private development of the
-gitctx data, evaluation, training, and proof-model pipeline.
+The `gctx1-v0` lineage, promoted as the current `gctx1-strict` reviewed SFT
+artifact, may be used for private development of the gitctx data, evaluation,
+training, and proof-model pipeline.
 
 It may also be used to train private experimental small language models, provided
 the outputs are described as experiments and not as public release-quality
@@ -18,21 +19,23 @@ public model-quality claims.
 
 ## Rationale
 
-The artifact improves on `next-v0` in concrete ways:
+The strict artifact improves on `next-v0` in concrete ways:
 
-- it expands from 335 to 6,727 promoted training records;
-- it includes 1,129 locked `REPORT` records;
-- it has passed generated-label validation with six recorded missing labels;
+- it expands from 335 to 11,926 promoted training records;
+- it includes 10,299 `DEV` records and 1,627 locked `REPORT` records;
+- it reserves 1,295 `HELD_OUT` candidates in the split plan;
+- it has passed generated-label validation with 14 recorded missing labels
+  across the merged lineage;
 - it has passed deterministic generated-label review policy with zero
   `needs_review` records;
-- it has passed baseline evaluation, record-level `REPORT` inspection,
-  dependency-free prototype smoke, and tiny-softmax neural smoke.
+- it has passed baseline evaluation, proof-readiness, dependency-free prototype
+  smoke, and tiny-softmax neural smoke on the strict artifact.
 
 The artifact still includes full source diffs from upstream repositories and has
-no promoted `HELD_OUT` split. The generated-label review policy is conservative
-and deterministic, not a full manual quality review. It is therefore suitable
-for private proof-model development, but insufficient for public dataset release
-or model-quality claims.
+no promoted `HELD_OUT` training split. The generated-label review policy is
+conservative and deterministic, not a full manual quality review. It is
+therefore suitable for private proof-model development, but insufficient for
+public dataset release or model-quality claims.
 
 ## Allowed Uses
 
@@ -58,13 +61,11 @@ or model-quality claims.
 
 ## Next Review Gate
 
-Before moving from `gctx1-v0` to a release-track proof model:
+Before moving from `gctx1-v0` to a release-track model:
 
-1. Decide whether GCTX-1 remains a smaller proof run or requires another data
-   expansion pass.
-2. Train a real small language-model configuration.
-3. Create or reserve a separate `HELD_OUT` artifact before release claims.
-4. Run model evals against locked `REPORT` and `HELD_OUT` splits.
-5. Complete redistribution review for any examples intended for public release.
-6. Write a model card, eval card, release license decision, and updated data
+1. Train a real small language-model configuration.
+2. Run model evals against locked `REPORT`.
+3. Keep `HELD_OUT` reserved and unused until release-claim evaluation.
+4. Complete redistribution review for any examples intended for public release.
+5. Write a model card, eval card, release license decision, and updated data
    card.

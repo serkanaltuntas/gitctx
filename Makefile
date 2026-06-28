@@ -41,8 +41,15 @@ PROOF_SOURCE_MANIFEST ?= manifests/source-manifest.$(PILOT_ARTIFACT).jsonl
 PROOF_SPLIT_PLAN ?= manifests/split-plan.$(PILOT_ARTIFACT).json
 PROOF_WRITE ?= 1
 PROOF_WRITE_FLAG = $(if $(filter 1 true yes,$(PROOF_WRITE)),--write)
+GCTX1_PROOF_ARTIFACT ?= gctx1-strict
+GCTX1_PROOF_CONFIG ?= configs/gctx1-proof-model.v0.json
+GCTX1_PROOF_SOURCE_MANIFEST ?= $(GITCTX_DATA_DIR)/manifests/source-manifest.gctx1.jsonl
+GCTX1_PROOF_SPLIT_PLAN ?= $(GITCTX_DATA_DIR)/manifests/split-plan.gctx1.json
+GCTX1_PROTOTYPE_REPORT = $(GITCTX_DATA_DIR)/artifacts/eval/path-type-v0.$(GCTX1_PROOF_ARTIFACT).v0.report.report.json
+GCTX1_NEURAL_REPORT = $(GITCTX_DATA_DIR)/artifacts/eval/tiny-softmax-v0.$(GCTX1_PROOF_ARTIFACT).v0.report.report.json
 
 .PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-policy pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-source-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-policy pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check merge-train-artifact artifact-eval-baseline artifact-split-inspection proof-readiness training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
+.PHONY: gctx1-proof-config-check gctx1-proof-readiness gctx1-proof-smoke gctx1-proof-smoke-check
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -215,6 +222,28 @@ proof-readiness:
 		--split-plan "$(PROOF_SPLIT_PLAN)" \
 		$(PROOF_WRITE_FLAG)
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
+
+gctx1-proof-config-check:
+	$(PYTHON) -m json.tool "$(GCTX1_PROOF_CONFIG)" >/dev/null
+
+gctx1-proof-readiness:
+	$(MAKE) proof-readiness \
+		GITCTX_DATA_DIR="$(GITCTX_DATA_DIR)" \
+		PILOT_ARTIFACT="$(GCTX1_PROOF_ARTIFACT)" \
+		PROOF_SOURCE_MANIFEST="$(GCTX1_PROOF_SOURCE_MANIFEST)" \
+		PROOF_SPLIT_PLAN="$(GCTX1_PROOF_SPLIT_PLAN)"
+
+gctx1-proof-smoke:
+	$(MAKE) training-smoke \
+		GITCTX_DATA_DIR="$(GITCTX_DATA_DIR)" \
+		PILOT_ARTIFACT="$(GCTX1_PROOF_ARTIFACT)"
+	$(MAKE) neural-smoke \
+		GITCTX_DATA_DIR="$(GITCTX_DATA_DIR)" \
+		PILOT_ARTIFACT="$(GCTX1_PROOF_ARTIFACT)"
+
+gctx1-proof-smoke-check:
+	$(PYTHON) -m json.tool "$(GCTX1_PROTOTYPE_REPORT)"
+	$(PYTHON) -m json.tool "$(GCTX1_NEURAL_REPORT)"
 
 training-smoke-train:
 	PYTHONPATH=src $(PYTHON) -m gitctx.prototype_model --data-dir "$(GITCTX_DATA_DIR)" train \
