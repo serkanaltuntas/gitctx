@@ -114,6 +114,8 @@ Use the named strict proof targets for handoff:
 ```bash
 make gctx1-proof-config-check
 make gctx1-proof-readiness
+make gctx1-tokenizer
+make gctx1-tokenizer-check
 make gctx1-proof-handoff
 make gctx1-proof-handoff-check
 make gctx1-proof-smoke
@@ -126,11 +128,17 @@ artifact, DEV/REPORT/HELD_OUT split roles, minimum record thresholds,
 locked-REPORT policy, reproducibility fields, and model/eval-card release
 preconditions.
 
+`gctx1-tokenizer` writes a dependency-free proof tokenizer artifact and coverage
+report under `artifacts/tokenizers/` in the private data repository. It learns
+the vocabulary only from reviewed `DEV` records. `REPORT` is used only to record
+known-token coverage before a real proof-model training job starts.
+
 `gctx1-proof-handoff` writes
 `artifacts/train-runs/gctx1-proof-model.v0.handoff.json` in the private data
 repository. The handoff manifest records config and input hashes, proof-readiness
-gates, training code revision, training contract, and required trainer outputs.
-It is the artifact to copy into an actual proof-model training job.
+gates, tokenizer hash, training code revision, training contract, and required
+trainer outputs. It is the artifact to copy into an actual proof-model training
+job.
 
 `gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
 models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M

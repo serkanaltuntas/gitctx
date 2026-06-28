@@ -35,6 +35,7 @@ def create_proof_handoff(
     config_path: str | Path,
     source_manifest_path: str | Path | None = None,
     split_plan_path: str | Path | None = None,
+    tokenizer_path: str | Path | None = None,
     code_revision: str | None = None,
 ) -> dict[str, Any]:
     """Create a training handoff manifest from config and proof-readiness gates."""
@@ -69,6 +70,10 @@ def create_proof_handoff(
             for name, gate in readiness["gates"].items()
             if gate["status"] != "pass"
         )
+    if tokenizer_path is not None:
+        selected_tokenizer_path = _data_path(data_dir, Path(tokenizer_path))
+        if not selected_tokenizer_path.exists():
+            blockers.append(f"tokenizer: missing {_display_path(selected_tokenizer_path, base=data_dir)}")
 
     status = "ready_for_training" if not blockers and readiness is not None else "blocked"
     revision = code_revision if code_revision is not None else _current_git_revision(Path.cwd())
@@ -94,6 +99,7 @@ def create_proof_handoff(
             readiness,
             source_manifest_path=source_manifest_path,
             split_plan_path=split_plan_path,
+            tokenizer_path=tokenizer_path,
         ),
         "readiness": _readiness_summary(readiness),
         "training_contract": _training_contract(config),
@@ -137,6 +143,7 @@ def _input_files(
     *,
     source_manifest_path: str | Path | None,
     split_plan_path: str | Path | None,
+    tokenizer_path: str | Path | None,
 ) -> dict[str, Any]:
     artifact_name = config_summary.get("artifact_name")
     artifact_version = config_summary.get("artifact_version")
@@ -161,6 +168,8 @@ def _input_files(
             files["source_manifest"] = _possibly_external_file_entry(data_dir, Path(source_manifest_path))
         if split_plan_path is not None:
             files["split_plan"] = _possibly_external_file_entry(data_dir, Path(split_plan_path))
+    if tokenizer_path is not None:
+        files["tokenizer"] = _possibly_external_file_entry(data_dir, Path(tokenizer_path))
     return files
 
 
@@ -223,8 +232,12 @@ def _data_file_entry(data_dir: Path, relative_path: Path) -> dict[str, Any]:
 
 
 def _possibly_external_file_entry(data_dir: Path, path: Path) -> dict[str, Any]:
-    selected = path if path.is_absolute() else data_dir / path
+    selected = _data_path(data_dir, path)
     return _file_entry(selected, display_base=data_dir)
+
+
+def _data_path(data_dir: Path, path: Path) -> Path:
+    return path if path.is_absolute() else data_dir / path
 
 
 def _file_entry(path: Path, *, display_base: Path | None = None) -> dict[str, Any]:
@@ -249,7 +262,7 @@ def _sha256(path: Path) -> str | None:
 
 
 def _display_path(path: Path, *, base: Path | None = None) -> str:
-    selected = path.resolve() if path.exists() else path
+    selected = path.resolve(strict=False)
     bases = [base, Path.cwd()]
     for candidate in bases:
         if candidate is None:
@@ -294,6 +307,7 @@ def main(argv: list[str] | None = None) -> int:
     create.add_argument("--config", type=Path, required=True)
     create.add_argument("--source-manifest")
     create.add_argument("--split-plan")
+    create.add_argument("--tokenizer")
     create.add_argument("--code-revision")
     create.add_argument("--write", action="store_true")
     create.add_argument("--json", action="store_true")
@@ -306,6 +320,7 @@ def main(argv: list[str] | None = None) -> int:
             config_path=args.config,
             source_manifest_path=args.source_manifest,
             split_plan_path=args.split_plan,
+            tokenizer_path=args.tokenizer,
             code_revision=args.code_revision,
         )
         if args.write:

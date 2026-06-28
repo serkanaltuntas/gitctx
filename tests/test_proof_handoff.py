@@ -14,12 +14,16 @@ class ProofHandoffTests(unittest.TestCase):
             config_path.parent.mkdir()
             config_path.write_text(json.dumps(_valid_config()) + "\n", encoding="utf-8")
             _write_ready_artifacts(root)
+            tokenizer_path = root / "artifacts/tokenizers/regex-diff-v0.gctx1-strict.v0.json"
+            tokenizer_path.parent.mkdir(parents=True)
+            tokenizer_path.write_text("{}\n", encoding="utf-8")
 
             handoff = create_proof_handoff(
                 root,
                 config_path=config_path,
                 source_manifest_path=root / "manifests/source-manifest.gctx1-strict.jsonl",
                 split_plan_path=root / "manifests/split-plan.gctx1-strict.json",
+                tokenizer_path=tokenizer_path,
                 code_revision="abc123",
             )
             output_path = write_proof_handoff(root, handoff)
@@ -32,6 +36,10 @@ class ProofHandoffTests(unittest.TestCase):
             self.assertEqual(
                 handoff["inputs"]["training_artifact"]["path"],
                 "artifacts/train/sft.gctx1-strict.v0.jsonl",
+            )
+            self.assertEqual(
+                handoff["inputs"]["tokenizer"]["path"],
+                "artifacts/tokenizers/regex-diff-v0.gctx1-strict.v0.json",
             )
             self.assertEqual(len(handoff["inputs"]["training_artifact"]["sha256"]), 64)
             self.assertEqual(
@@ -56,6 +64,29 @@ class ProofHandoffTests(unittest.TestCase):
             self.assertEqual(handoff["status"], "blocked")
             self.assertIn(
                 "config: evaluation.locked_report_required: expected True",
+                handoff["blockers"],
+            )
+
+    def test_blocks_missing_tokenizer_when_required(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "configs/gctx1-proof-model.v0.json"
+            config_path.parent.mkdir()
+            config_path.write_text(json.dumps(_valid_config()) + "\n", encoding="utf-8")
+            _write_ready_artifacts(root)
+
+            handoff = create_proof_handoff(
+                root,
+                config_path=config_path,
+                source_manifest_path=root / "manifests/source-manifest.gctx1-strict.jsonl",
+                split_plan_path=root / "manifests/split-plan.gctx1-strict.json",
+                tokenizer_path=Path("artifacts/tokenizers/missing.json"),
+                code_revision="abc123",
+            )
+
+            self.assertEqual(handoff["status"], "blocked")
+            self.assertIn(
+                "tokenizer: missing artifacts/tokenizers/missing.json",
                 handoff["blockers"],
             )
 
