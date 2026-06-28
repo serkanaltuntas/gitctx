@@ -118,6 +118,8 @@ make gctx1-tokenizer
 make gctx1-tokenizer-check
 make gctx1-proof-handoff
 make gctx1-proof-handoff-check
+make gctx1-proof-train-dry-run
+make gctx1-proof-train-dry-run-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
@@ -139,6 +141,13 @@ repository. The handoff manifest records config and input hashes, proof-readines
 gates, tokenizer hash, training code revision, training contract, and required
 trainer outputs. It is the artifact to copy into an actual proof-model training
 job.
+
+`gctx1-proof-train-dry-run` consumes the handoff manifest and writes a
+no-weights proof-trainer run under `artifacts/train-runs/`. It verifies the
+handoff input hashes, reports the local Python/Torch runtime state, counts
+tokenized records and context windows by split, and writes a checkpoint skeleton
+that deliberately contains no model weights. This validates the trainer artifact
+contract before the 60M-100M decoder-only proof training job exists.
 
 `gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
 models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M

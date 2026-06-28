@@ -150,6 +150,8 @@ make gctx1-tokenizer
 make gctx1-tokenizer-check
 make gctx1-proof-handoff
 make gctx1-proof-handoff-check
+make gctx1-proof-train-dry-run
+make gctx1-proof-train-dry-run-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
@@ -164,7 +166,11 @@ contract, minimum record thresholds, locked-REPORT evaluation policy,
 reproducibility fields, and release-card preconditions before the real training
 handoff starts. The proof handoff target writes a private run manifest with the
 config hash, training artifact hash, tokenizer hash, readiness gates, training
-code revision, and required trainer outputs.
+code revision, and required trainer outputs. The proof-trainer dry-run target
+then verifies those handoff hashes, records local runtime capability, counts
+tokens and context windows by split, and writes a no-weights checkpoint skeleton.
+It is the setup proof for the future decoder-only trainer; it is not a model
+quality claim.
 
 ## Recommended First Public Model
 

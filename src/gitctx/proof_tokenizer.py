@@ -108,7 +108,7 @@ def build_proof_tokenizer(
     for record in records:
         split = record["data_split"]
         split_record_counts[split] += 1
-        tokens = _record_tokens(record)
+        tokens = record_tokens(record)
         split_token_counts[split] += len(tokens)
         if split == train_split:
             token_counts.update(tokens)
@@ -299,7 +299,9 @@ def _validate_vocab(vocab: list[Any], errors: list[str]) -> None:
             seen_tokens.add(token)
 
 
-def _record_tokens(record: dict[str, Any]) -> list[str]:
+def record_tokens(record: dict[str, Any]) -> list[str]:
+    """Return tokenizer tokens for one reviewed SFT record."""
+
     tokens: list[str] = ["<bos>"]
     for message in record.get("messages", []):
         role = message.get("role")
@@ -326,7 +328,7 @@ def _coverage_for_split(
         if record["data_split"] != split:
             continue
         records_seen += 1
-        for token in _record_tokens(record):
+        for token in record_tokens(record):
             total += 1
             if token not in token_to_id:
                 unknown += 1

@@ -46,6 +46,9 @@ GCTX1_PROOF_CONFIG ?= configs/gctx1-proof-model.v0.json
 GCTX1_PROOF_SOURCE_MANIFEST ?= $(GITCTX_DATA_DIR)/manifests/source-manifest.gctx1.jsonl
 GCTX1_PROOF_SPLIT_PLAN ?= $(GITCTX_DATA_DIR)/manifests/split-plan.gctx1.json
 GCTX1_PROOF_HANDOFF = $(GITCTX_DATA_DIR)/artifacts/train-runs/gctx1-proof-model.v0.handoff.json
+GCTX1_PROOF_RUN_ID ?= gctx1-proof-model.v0.dry-run
+GCTX1_PROOF_TRAIN_REPORT = $(GITCTX_DATA_DIR)/artifacts/train-runs/$(GCTX1_PROOF_RUN_ID).report.json
+GCTX1_PROOF_TRAIN_CHECKPOINT = $(GITCTX_DATA_DIR)/artifacts/train-runs/$(GCTX1_PROOF_RUN_ID).checkpoint.json
 GCTX1_TOKENIZER_VERSION ?= regex-diff-v0
 GCTX1_TOKENIZER_VOCAB_SIZE ?= 32000
 GCTX1_TOKENIZER_MIN_FREQUENCY ?= 2
@@ -55,7 +58,7 @@ GCTX1_PROTOTYPE_REPORT = $(GITCTX_DATA_DIR)/artifacts/eval/path-type-v0.$(GCTX1_
 GCTX1_NEURAL_REPORT = $(GITCTX_DATA_DIR)/artifacts/eval/tiny-softmax-v0.$(GCTX1_PROOF_ARTIFACT).v0.report.report.json
 
 .PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-policy pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-source-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-policy pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check merge-train-artifact artifact-eval-baseline artifact-split-inspection proof-readiness training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
-.PHONY: gctx1-tokenizer gctx1-tokenizer-check gctx1-proof-config-check gctx1-proof-readiness gctx1-proof-handoff gctx1-proof-handoff-check gctx1-proof-smoke gctx1-proof-smoke-check
+.PHONY: gctx1-tokenizer gctx1-tokenizer-check gctx1-proof-config-check gctx1-proof-readiness gctx1-proof-handoff gctx1-proof-handoff-check gctx1-proof-train-dry-run gctx1-proof-train-dry-run-check gctx1-proof-smoke gctx1-proof-smoke-check
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -267,6 +270,20 @@ gctx1-proof-handoff:
 
 gctx1-proof-handoff-check:
 	$(PYTHON) -m json.tool "$(GCTX1_PROOF_HANDOFF)"
+
+gctx1-proof-train-dry-run:
+	PYTHONPATH=src $(PYTHON) -m gitctx.proof_train --data-dir "$(GITCTX_DATA_DIR)" dry-run \
+		--handoff "$(GCTX1_PROOF_HANDOFF)" \
+		--run-id "$(GCTX1_PROOF_RUN_ID)" \
+		--write \
+		--fail-on-blocked
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
+
+gctx1-proof-train-dry-run-check:
+	PYTHONPATH=src $(PYTHON) -m gitctx.proof_train --data-dir "$(GITCTX_DATA_DIR)" validate \
+		--run-id "$(GCTX1_PROOF_RUN_ID)"
+	$(PYTHON) -m json.tool "$(GCTX1_PROOF_TRAIN_REPORT)"
+	$(PYTHON) -m json.tool "$(GCTX1_PROOF_TRAIN_CHECKPOINT)"
 
 gctx1-proof-smoke:
 	$(MAKE) training-smoke \

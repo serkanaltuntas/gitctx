@@ -114,6 +114,8 @@ make gctx1-tokenizer
 make gctx1-tokenizer-check
 make gctx1-proof-handoff
 make gctx1-proof-handoff-check
+make gctx1-proof-train-dry-run
+make gctx1-proof-train-dry-run-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```

@@ -1,0 +1,424 @@
+"""Proof-model trainer entrypoint and dry-run artifact contract."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import math
+from pathlib import Path
+import platform
+import sys
+from typing import Any, Iterable
+
+from gitctx.proof_tokenizer import record_tokens
+
+TRAIN_RUN_DIR = Path("artifacts/train-runs")
+DEFAULT_RUN_ID = "gctx1-proof-model.v0.dry-run"
+SCHEMA_VERSION = "v0"
+
+
+def proof_train_report_path(run_id: str) -> Path:
+    """Return the proof-trainer report path for a run id."""
+
+    _validate_identifier(run_id, "run_id")
+    return TRAIN_RUN_DIR / f"{run_id}.report.json"
+
+
+def proof_train_checkpoint_path(run_id: str) -> Path:
+    """Return the proof-trainer checkpoint path for a run id."""
+
+    _validate_identifier(run_id, "run_id")
+    return TRAIN_RUN_DIR / f"{run_id}.checkpoint.json"
+
+
+def dry_run_proof_training(
+    data_dir: str | Path,
+    *,
+    handoff_path: str | Path,
+    run_id: str = DEFAULT_RUN_ID,
+    max_records_per_split: int | None = None,
+    require_torch: bool = False,
+    write: bool = False,
+) -> dict[str, Any]:
+    """Validate proof-training inputs and write a no-weights checkpoint skeleton."""
+
+    _validate_identifier(run_id, "run_id")
+    if max_records_per_split is not None and max_records_per_split < 1:
+        raise ValueError("max_records_per_split must be positive")
+
+    data_dir = Path(data_dir)
+    selected_handoff_path = _data_path(data_dir, Path(handoff_path))
+    handoff = json.loads(selected_handoff_path.read_text(encoding="utf-8"))
+    blockers: list[str] = []
+    if handoff.get("status") != "ready_for_training":
+        blockers.append("handoff status is not ready_for_training")
+
+    input_checks = _verify_inputs(data_dir, handoff.get("inputs", {}))
+    blockers.extend(input_checks["errors"])
+    torch_status = _torch_status()
+    if require_torch and not torch_status["available"]:
+        blockers.append("torch is required but not importable")
+
+    tokenizer = _load_input_json(data_dir, handoff, "tokenizer", blockers)
+    training_path = _input_path(data_dir, handoff, "training_artifact", blockers)
+    tokenization = _empty_tokenization_summary()
+    if tokenizer is not None and training_path is not None and training_path.exists():
+        tokenization = _tokenization_summary(
+            training_path,
+            tokenizer=tokenizer,
+            context_tokens=_context_tokens(handoff),
+            max_records_per_split=max_records_per_split,
+        )
+
+    status = "dry_run_passed" if not blockers else "blocked"
+    report = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "run_kind": "proof_training_dry_run",
+        "status": status,
+        "blockers": blockers,
+        "handoff": {
+            "path": _display_path(selected_handoff_path, base=data_dir),
+            "id": handoff.get("id"),
+            "status": handoff.get("status"),
+            "sha256": _sha256(selected_handoff_path),
+        },
+        "code": handoff.get("code", {}),
+        "training_contract": handoff.get("training_contract", {}),
+        "input_checks": input_checks["files"],
+        "environment": {
+            "python": sys.version.split()[0],
+            "platform": platform.platform(),
+            "torch": torch_status,
+        },
+        "tokenization": tokenization,
+        "outputs": {
+            "checkpoint_path": str(proof_train_checkpoint_path(run_id)),
+            "report_path": str(proof_train_report_path(run_id)),
+        },
+        "claim_policy": (
+            "Dry-run artifacts validate trainer inputs and accounting only; "
+            "they are not model-quality evidence."
+        ),
+    }
+    checkpoint = _checkpoint_skeleton(report, handoff=handoff)
+    if write:
+        _write_run_artifacts(data_dir, run_id=run_id, report=report, checkpoint=checkpoint)
+    _print_report(report)
+    return report
+
+
+def validate_proof_training_run(data_dir: str | Path, *, run_id: str) -> dict[str, Any]:
+    """Validate dry-run trainer report and checkpoint artifacts."""
+
+    _validate_identifier(run_id, "run_id")
+    data_dir = Path(data_dir)
+    report_path = data_dir / proof_train_report_path(run_id)
+    checkpoint_path = data_dir / proof_train_checkpoint_path(run_id)
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    errors: list[str] = []
+    if report.get("run_id") != run_id:
+        errors.append("report run_id mismatch")
+    if report.get("status") != "dry_run_passed":
+        errors.append("report status is not dry_run_passed")
+    if checkpoint.get("run_id") != run_id:
+        errors.append("checkpoint run_id mismatch")
+    if checkpoint.get("contains_model_weights") is not False:
+        errors.append("dry-run checkpoint must not contain model weights")
+    if checkpoint.get("report_sha256") != _sha256(report_path):
+        errors.append("checkpoint report_sha256 does not match report")
+    validation = {
+        "run_id": run_id,
+        "valid": not errors,
+        "errors": errors,
+        "report_path": str(proof_train_report_path(run_id)),
+        "checkpoint_path": str(proof_train_checkpoint_path(run_id)),
+    }
+    for key, value in validation.items():
+        if key != "errors":
+            print(key, value)
+    for error in errors:
+        print("error", error)
+    if errors:
+        raise SystemExit(1)
+    return validation
+
+
+def _verify_inputs(data_dir: Path, inputs: Any) -> dict[str, Any]:
+    if not isinstance(inputs, dict):
+        return {"files": {}, "errors": ["handoff inputs must be an object"]}
+    files: dict[str, Any] = {}
+    errors: list[str] = []
+    for name, entry in sorted(inputs.items()):
+        if not isinstance(entry, dict):
+            errors.append(f"input {name}: entry must be an object")
+            continue
+        path_value = entry.get("path")
+        if not isinstance(path_value, str):
+            errors.append(f"input {name}: path is missing")
+            continue
+        path = _data_path(data_dir, Path(path_value))
+        expected_sha = entry.get("sha256")
+        actual_sha = _sha256(path)
+        ok = path.exists() and (not isinstance(expected_sha, str) or actual_sha == expected_sha)
+        files[name] = {
+            "path": _display_path(path, base=data_dir),
+            "exists": path.exists(),
+            "expected_sha256": expected_sha,
+            "actual_sha256": actual_sha,
+            "ok": ok,
+        }
+        if not path.exists():
+            errors.append(f"input {name}: missing {files[name]['path']}")
+        elif isinstance(expected_sha, str) and actual_sha != expected_sha:
+            errors.append(f"input {name}: sha256 mismatch")
+    return {"files": files, "errors": errors}
+
+
+def _load_input_json(
+    data_dir: Path,
+    handoff: dict[str, Any],
+    input_name: str,
+    blockers: list[str],
+) -> dict[str, Any] | None:
+    path = _input_path(data_dir, handoff, input_name, blockers)
+    if path is None or not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _input_path(
+    data_dir: Path,
+    handoff: dict[str, Any],
+    input_name: str,
+    blockers: list[str],
+) -> Path | None:
+    inputs = handoff.get("inputs", {})
+    entry = inputs.get(input_name) if isinstance(inputs, dict) else None
+    if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+        blockers.append(f"input {input_name}: missing from handoff")
+        return None
+    return _data_path(data_dir, Path(entry["path"]))
+
+
+def _tokenization_summary(
+    training_path: Path,
+    *,
+    tokenizer: dict[str, Any],
+    context_tokens: int,
+    max_records_per_split: int | None,
+) -> dict[str, Any]:
+    vocab = tokenizer.get("vocab")
+    if not isinstance(vocab, list):
+        raise ValueError("tokenizer vocab must be a list")
+    token_to_id = {
+        entry["token"]: entry["id"]
+        for entry in vocab
+        if isinstance(entry, dict) and isinstance(entry.get("token"), str)
+    }
+    split_counts = _split_counter()
+    split_tokens = _split_counter()
+    split_unknown = _split_counter()
+    split_sequences = _split_counter()
+    split_max_record_tokens = _split_counter()
+    total_records = 0
+    processed_records = 0
+
+    for record in _iter_jsonl(training_path):
+        split = record["data_split"]
+        total_records += 1
+        if split not in split_counts:
+            split_counts[split] = 0
+            split_tokens[split] = 0
+            split_unknown[split] = 0
+            split_sequences[split] = 0
+            split_max_record_tokens[split] = 0
+        if max_records_per_split is not None and split_counts[split] >= max_records_per_split:
+            continue
+        tokens = record_tokens(record)
+        unknown = sum(1 for token in tokens if token not in token_to_id)
+        token_count = len(tokens)
+        split_counts[split] += 1
+        split_tokens[split] += token_count
+        split_unknown[split] += unknown
+        split_sequences[split] += math.ceil(token_count / context_tokens)
+        split_max_record_tokens[split] = max(split_max_record_tokens[split], token_count)
+        processed_records += 1
+
+    by_split = {}
+    for split in sorted(split_counts):
+        tokens = split_tokens[split]
+        unknown = split_unknown[split]
+        by_split[split] = {
+            "records": split_counts[split],
+            "tokens": tokens,
+            "unknown_tokens": unknown,
+            "known_token_fraction": round((tokens - unknown) / tokens, 6) if tokens else 0.0,
+            "sequences_at_context": split_sequences[split],
+            "max_record_tokens": split_max_record_tokens[split],
+        }
+    return {
+        "tokenizer_version": tokenizer.get("tokenizer_version"),
+        "vocab_size": tokenizer.get("vocab_size"),
+        "context_tokens": context_tokens,
+        "total_records_seen": total_records,
+        "processed_records": processed_records,
+        "max_records_per_split": max_records_per_split,
+        "by_split": by_split,
+    }
+
+
+def _checkpoint_skeleton(report: dict[str, Any], *, handoff: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "checkpoint_kind": "proof_training_dry_run_checkpoint",
+        "run_id": report["run_id"],
+        "status": report["status"],
+        "contains_model_weights": False,
+        "report_sha256": None,
+        "handoff_id": handoff.get("id"),
+        "training_code_revision": report["code"].get("training_code_revision"),
+        "tokenization": report["tokenization"],
+        "resume_policy": "real trainer checkpoints must include optimizer, scheduler, and RNG state",
+    }
+
+
+def _write_run_artifacts(
+    data_dir: Path,
+    *,
+    run_id: str,
+    report: dict[str, Any],
+    checkpoint: dict[str, Any],
+) -> None:
+    report_path = data_dir / proof_train_report_path(run_id)
+    checkpoint_path = data_dir / proof_train_checkpoint_path(run_id)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    checkpoint["report_sha256"] = _sha256(report_path)
+    checkpoint_path.write_text(
+        json.dumps(checkpoint, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _empty_tokenization_summary() -> dict[str, Any]:
+    return {
+        "context_tokens": None,
+        "total_records_seen": 0,
+        "processed_records": 0,
+        "by_split": {},
+    }
+
+
+def _context_tokens(handoff: dict[str, Any]) -> int:
+    contract = handoff.get("training_contract", {})
+    value = contract.get("context_tokens") if isinstance(contract, dict) else None
+    return int(value) if isinstance(value, int) and value > 0 else 8192
+
+
+def _torch_status() -> dict[str, Any]:
+    spec = importlib.util.find_spec("torch")
+    status: dict[str, Any] = {"available": spec is not None}
+    if spec is not None:
+        try:
+            import torch  # type: ignore[import-not-found]
+
+            status["version"] = torch.__version__
+            status["cuda_available"] = bool(torch.cuda.is_available())
+            status["mps_available"] = bool(
+                getattr(torch.backends, "mps", None) and torch.backends.mps.is_available()
+            )
+        except Exception as exc:  # pragma: no cover - defensive environment report
+            status["import_error"] = str(exc)
+    return status
+
+
+def _split_counter() -> dict[str, int]:
+    return {"DEV": 0, "REPORT": 0, "HELD_OUT": 0}
+
+
+def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                yield json.loads(line)
+
+
+def _sha256(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _data_path(data_dir: Path, path: Path) -> Path:
+    return path if path.is_absolute() else data_dir / path
+
+
+def _display_path(path: Path, *, base: Path | None = None) -> str:
+    selected = path.resolve(strict=False)
+    if base is not None:
+        try:
+            return selected.relative_to(base.resolve()).as_posix()
+        except ValueError:
+            pass
+    return path.as_posix()
+
+
+def _validate_identifier(value: str, name: str) -> None:
+    if not value.replace("-", "").replace("_", "").replace(".", "").isalnum():
+        raise ValueError(f"{name} must be a stable alphanumeric identifier")
+
+
+def _print_report(report: dict[str, Any]) -> None:
+    print("run_id", report["run_id"])
+    print("status", report["status"])
+    for split, summary in report["tokenization"]["by_split"].items():
+        print(f"{split}_records", summary["records"])
+        print(f"{split}_tokens", summary["tokens"])
+        print(f"{split}_known_token_fraction", summary["known_token_fraction"])
+    for blocker in report["blockers"]:
+        print("blocker", blocker)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Run GCTX proof-trainer setup checks.")
+    parser.add_argument("--data-dir", type=Path, required=True)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    dry_run = subparsers.add_parser("dry-run")
+    dry_run.add_argument("--handoff", required=True)
+    dry_run.add_argument("--run-id", default=DEFAULT_RUN_ID)
+    dry_run.add_argument("--max-records-per-split", type=int)
+    dry_run.add_argument("--require-torch", action="store_true")
+    dry_run.add_argument("--write", action="store_true")
+    dry_run.add_argument("--fail-on-blocked", action="store_true")
+
+    validate = subparsers.add_parser("validate")
+    validate.add_argument("--run-id", default=DEFAULT_RUN_ID)
+
+    args = parser.parse_args(argv)
+    if args.command == "dry-run":
+        report = dry_run_proof_training(
+            args.data_dir,
+            handoff_path=args.handoff,
+            run_id=args.run_id,
+            max_records_per_split=args.max_records_per_split,
+            require_torch=args.require_torch,
+            write=args.write,
+        )
+        if args.fail_on_blocked and report["status"] != "dry_run_passed":
+            return 1
+    elif args.command == "validate":
+        validate_proof_training_run(args.data_dir, run_id=args.run_id)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
