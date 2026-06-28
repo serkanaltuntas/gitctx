@@ -45,11 +45,12 @@ GCTX1_PROOF_ARTIFACT ?= gctx1-strict
 GCTX1_PROOF_CONFIG ?= configs/gctx1-proof-model.v0.json
 GCTX1_PROOF_SOURCE_MANIFEST ?= $(GITCTX_DATA_DIR)/manifests/source-manifest.gctx1.jsonl
 GCTX1_PROOF_SPLIT_PLAN ?= $(GITCTX_DATA_DIR)/manifests/split-plan.gctx1.json
+GCTX1_PROOF_HANDOFF = $(GITCTX_DATA_DIR)/artifacts/train-runs/gctx1-proof-model.v0.handoff.json
 GCTX1_PROTOTYPE_REPORT = $(GITCTX_DATA_DIR)/artifacts/eval/path-type-v0.$(GCTX1_PROOF_ARTIFACT).v0.report.report.json
 GCTX1_NEURAL_REPORT = $(GITCTX_DATA_DIR)/artifacts/eval/tiny-softmax-v0.$(GCTX1_PROOF_ARTIFACT).v0.report.report.json
 
 .PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-policy pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-source-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-policy pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check merge-train-artifact artifact-eval-baseline artifact-split-inspection proof-readiness training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
-.PHONY: gctx1-proof-config-check gctx1-proof-readiness gctx1-proof-smoke gctx1-proof-smoke-check
+.PHONY: gctx1-proof-config-check gctx1-proof-readiness gctx1-proof-handoff gctx1-proof-handoff-check gctx1-proof-smoke gctx1-proof-smoke-check
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -232,6 +233,18 @@ gctx1-proof-readiness:
 		PILOT_ARTIFACT="$(GCTX1_PROOF_ARTIFACT)" \
 		PROOF_SOURCE_MANIFEST="$(GCTX1_PROOF_SOURCE_MANIFEST)" \
 		PROOF_SPLIT_PLAN="$(GCTX1_PROOF_SPLIT_PLAN)"
+
+gctx1-proof-handoff:
+	PYTHONPATH=src $(PYTHON) -m gitctx.proof_handoff --data-dir "$(GITCTX_DATA_DIR)" create \
+		--config "$(GCTX1_PROOF_CONFIG)" \
+		--source-manifest "$(GCTX1_PROOF_SOURCE_MANIFEST)" \
+		--split-plan "$(GCTX1_PROOF_SPLIT_PLAN)" \
+		--write \
+		--fail-on-blocked
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
+
+gctx1-proof-handoff-check:
+	$(PYTHON) -m json.tool "$(GCTX1_PROOF_HANDOFF)"
 
 gctx1-proof-smoke:
 	$(MAKE) training-smoke \

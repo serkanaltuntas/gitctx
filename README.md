@@ -110,6 +110,8 @@ make artifact-split-inspection PILOT_ARTIFACT=next DATA_SPLIT=REPORT
 make training-smoke PILOT_ARTIFACT=next
 make gctx1-proof-config-check
 make gctx1-proof-readiness
+make gctx1-proof-handoff
+make gctx1-proof-handoff-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```

@@ -146,6 +146,8 @@ For the current strict proof artifact, use the named targets:
 ```bash
 make gctx1-proof-config-check
 make gctx1-proof-readiness
+make gctx1-proof-handoff
+make gctx1-proof-handoff-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
@@ -156,7 +158,9 @@ current pipeline smoke models on locked `REPORT`. The proof config check is not
 just JSON parsing: it verifies the GCTX-1 proof band, DEV/REPORT/HELD_OUT split
 contract, minimum record thresholds, locked-REPORT evaluation policy,
 reproducibility fields, and release-card preconditions before the real training
-handoff starts.
+handoff starts. The proof handoff target writes a private run manifest with the
+config hash, training artifact hash, readiness gates, training code revision,
+and required trainer outputs.
 
 ## Recommended First Public Model
 
