@@ -118,6 +118,12 @@ make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
 
+`gctx1-proof-config-check` validates the proof-run contract in
+`configs/gctx1-proof-model.v0.json`: the GCTX-1 parameter band, strict data
+artifact, DEV/REPORT/HELD_OUT split roles, minimum record thresholds,
+locked-REPORT policy, reproducibility fields, and model/eval-card release
+preconditions.
+
 `gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
 models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M
 proof language-model run.

@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitctx.com/schemas/proof-model-config.schema.json",
+  "title": "GCTX proof-model config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "version",
+    "status",
+    "purpose",
+    "data",
+    "model",
+    "training",
+    "evaluation",
+    "release"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["planned", "active", "completed", "superseded"]
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_name",
+        "artifact_version",
+        "train_split",
+        "eval_split",
+        "reserved_split",
+        "minimum_dev_records",
+        "minimum_report_records",
+        "minimum_reserved_held_out_records"
+      ],
+      "properties": {
+        "artifact_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+        },
+        "artifact_version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+        },
+        "train_split": {
+          "const": "DEV"
+        },
+        "eval_split": {
+          "const": "REPORT"
+        },
+        "reserved_split": {
+          "const": "HELD_OUT"
+        },
+        "minimum_dev_records": {
+          "type": "integer",
+          "minimum": 10000
+        },
+        "minimum_report_records": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "minimum_reserved_held_out_records": {
+          "type": "integer",
+          "minimum": 1000
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_rung",
+        "target_parameter_range",
+        "architecture",
+        "context_tokens",
+        "tokenizer",
+        "objective"
+      ],
+      "properties": {
+        "target_rung": {
+          "const": "GCTX-1"
+        },
+        "target_parameter_range": {
+          "type": "string",
+          "pattern": "^\\d+(?:\\.\\d+)?[MB]-\\d+(?:\\.\\d+)?[MB]$"
+        },
+        "architecture": {
+          "const": "decoder-only transformer"
+        },
+        "context_tokens": {
+          "type": "integer",
+          "minimum": 8192
+        },
+        "tokenizer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "training": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["precision", "optimizer", "checkpoint_policy", "reproducibility"],
+      "properties": {
+        "precision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "optimizer": {
+          "const": "adamw"
+        },
+        "checkpoint_policy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reproducibility": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locked_report_required", "metrics", "quality_claim_policy"],
+      "properties": {
+        "locked_report_required": {
+          "const": true
+        },
+        "metrics": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "quality_claim_policy": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "public_model_release",
+        "requires_model_card",
+        "requires_eval_card",
+        "requires_dataset_redistribution_review"
+      ],
+      "properties": {
+        "public_model_release": {
+          "const": false
+        },
+        "requires_model_card": {
+          "const": true
+        },
+        "requires_eval_card": {
+          "const": true
+        },
+        "requires_dataset_redistribution_review": {
+          "const": true
+        }
+      }
+    }
+  }
+}

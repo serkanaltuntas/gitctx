@@ -151,8 +151,12 @@ make gctx1-proof-smoke-check
 ```
 
 These targets do not train the 60M-100M proof language model. They validate the
-proof config, rerun readiness against the strict artifact, and run the current
-pipeline smoke models on locked `REPORT`.
+proof config contract, rerun readiness against the strict artifact, and run the
+current pipeline smoke models on locked `REPORT`. The proof config check is not
+just JSON parsing: it verifies the GCTX-1 proof band, DEV/REPORT/HELD_OUT split
+contract, minimum record thresholds, locked-REPORT evaluation policy,
+reproducibility fields, and release-card preconditions before the real training
+handoff starts.
 
 ## Recommended First Public Model
 

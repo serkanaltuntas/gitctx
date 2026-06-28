@@ -224,7 +224,7 @@ proof-readiness:
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
 
 gctx1-proof-config-check:
-	$(PYTHON) -m json.tool "$(GCTX1_PROOF_CONFIG)" >/dev/null
+	PYTHONPATH=src $(PYTHON) -m gitctx.proof_model_config validate "$(GCTX1_PROOF_CONFIG)"
 
 gctx1-proof-readiness:
 	$(MAKE) proof-readiness \
