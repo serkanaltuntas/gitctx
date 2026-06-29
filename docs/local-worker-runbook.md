@@ -52,6 +52,36 @@ source .venv/bin/activate
 python -m pip install -e .
 ```
 
+For proof language-model training workers, prefer a `uv` managed runtime. The
+public package intentionally does not require PyTorch at install time, so install
+the backend only on machines that will run `gctx1-proof-lm-train`:
+
+```bash
+cd gitctx
+git pull --ff-only origin main
+uv venv .venv
+uv pip install -e .
+uv pip install torch
+```
+
+After that, pass the `uv` environment Python to Make:
+
+```bash
+make gctx1-proof-lm-train \
+  PYTHON=".venv/bin/python" \
+  GITCTX_DATA_DIR="../gitctx-data" \
+  GCTX1_PROOF_LM_MAX_RECORDS=32 \
+  GCTX1_PROOF_LM_MAX_STEPS=8
+
+make gctx1-proof-lm-train-check \
+  PYTHON=".venv/bin/python" \
+  GITCTX_DATA_DIR="../gitctx-data"
+```
+
+Use `GCTX1_PROOF_LM_DEVICE=cpu`, `mps`, or `cuda` according to the local PyTorch
+runtime. Keep bounded `GCTX1_PROOF_LM_MAX_*` values for smoke runs; remove those
+limits only when deliberately starting the expensive proof-model training job.
+
 ## Source-Diff Smoke Extraction
 
 Run:

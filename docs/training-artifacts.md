@@ -232,6 +232,26 @@ deterministic cursor-based resume. Use `GCTX1_PROOF_LM_MAX_RECORDS` and
 the expensive proof-model training job and still needs locked `REPORT`
 evaluation before any quality claim.
 
+On training workers with `uv`, prepare the optional PyTorch runtime explicitly:
+
+```bash
+uv venv .venv
+uv pip install -e .
+uv pip install torch
+```
+
+Then run bounded proof LM training from the public repository while writing
+artifacts to the sibling private data repository:
+
+```bash
+make gctx1-proof-lm-train \
+  PYTHON=".venv/bin/python" \
+  GITCTX_DATA_DIR="../gitctx-data" \
+  GCTX1_PROOF_LM_MAX_RECORDS=32 \
+  GCTX1_PROOF_LM_MAX_STEPS=8
+make gctx1-proof-lm-train-check PYTHON=".venv/bin/python" GITCTX_DATA_DIR="../gitctx-data"
+```
+
 `gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
 models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M
 proof language-model run.
