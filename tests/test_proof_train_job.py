@@ -73,6 +73,101 @@ class ProofTrainJobTests(unittest.TestCase):
             self.assertIn("training contract train_split must be DEV", job["blockers"])
             self.assertIn("data contract train_split must be DEV", job["blockers"])
 
+    def test_blocks_if_sequence_report_was_built_from_different_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff_path = _write_ready_job_inputs(root, sequence_handoff_sha="0" * 64)
+
+            job = create_proof_trainer_job(
+                root,
+                handoff_path=handoff_path,
+                run_id="test-proof-run",
+                code_revision="abc123",
+            )
+
+            self.assertEqual(job["status"], "blocked")
+            self.assertIn("sequence report handoff sha256 mismatch", job["blockers"])
+
+    def test_blocks_if_sequence_report_input_checks_are_malformed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff_path = _write_ready_job_inputs(root)
+            report_path = root / proof_sequence_report_path("test-proof-run")
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["input_checks"] = "malformed"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            job = create_proof_trainer_job(
+                root,
+                handoff_path=handoff_path,
+                run_id="test-proof-run",
+                code_revision="abc123",
+            )
+
+            self.assertEqual(job["status"], "blocked")
+            self.assertIn("sequence report sequence-plan sha256 is missing", job["blockers"])
+            self.assertIn("sequence report handoff sha256 is missing", job["blockers"])
+
+    def test_blocks_if_training_artifact_hash_does_not_match_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff_path = _write_ready_job_inputs(root)
+            (root / "artifacts/train/sft.gctx1-strict.v0.jsonl").write_text(
+                "{\"changed\": true}\n",
+                encoding="utf-8",
+            )
+
+            job = create_proof_trainer_job(
+                root,
+                handoff_path=handoff_path,
+                run_id="test-proof-run",
+                code_revision="abc123",
+            )
+
+            self.assertEqual(job["status"], "blocked")
+            self.assertIn("training_artifact sha256 mismatch", job["blockers"])
+
+    def test_validation_rejects_stale_sequence_metadata_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff_path = _write_ready_job_inputs(root)
+            create_proof_trainer_job(
+                root,
+                handoff_path=handoff_path,
+                run_id="test-proof-run",
+                code_revision="abc123",
+                write=True,
+            )
+            (root / proof_sequence_metadata_path("test-proof-run")).write_text(
+                "{\"changed\": true}\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(SystemExit):
+                validate_proof_trainer_job(root, run_id="test-proof-run")
+
+    def test_validation_rejects_input_without_checksum(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff_path = _write_ready_job_inputs(root)
+            create_proof_trainer_job(
+                root,
+                handoff_path=handoff_path,
+                run_id="test-proof-run",
+                code_revision="abc123",
+                write=True,
+            )
+            job_path = root / proof_trainer_job_path("test-proof-run")
+            job = json.loads(job_path.read_text(encoding="utf-8"))
+            del job["inputs"]["handoff"]["sha256"]
+            job_path.write_text(json.dumps(job, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(SystemExit):
+                validate_proof_trainer_job(root, run_id="test-proof-run")
+
     def test_trainer_job_path_is_stable(self) -> None:
         self.assertEqual(
             proof_trainer_job_path("gctx1-proof-model.v0.dry-run"),
@@ -85,6 +180,7 @@ def _write_ready_job_inputs(
     *,
     train_split: str = "DEV",
     report_excluded_records: int = 0,
+    sequence_handoff_sha: str | None = None,
 ) -> Path:
     tokenizer_path = root / "artifacts/tokenizers/regex-diff-v0.gctx1-strict.v0.json"
     training_path = root / "artifacts/train/sft.gctx1-strict.v0.jsonl"
@@ -94,64 +190,32 @@ def _write_ready_job_inputs(
     sequence_plan_path = root / proof_train_sequence_plan_path("test-proof-run")
     for path in (tokenizer_path, training_path, handoff_path, sequence_report_path):
         path.parent.mkdir(parents=True, exist_ok=True)
+    vocab = [
+        {"id": index, "token": f"tok{index}", "count": 1}
+        for index in range(32_000)
+    ]
     tokenizer = {
         "tokenizer_kind": "dependency_free_regex_diff_frequency_tokenizer",
         "tokenizer_version": "regex-diff-v0",
+        "special_tokens": {
+            "<pad>": 0,
+            "<unk>": 1,
+            "<bos>": 2,
+            "<eos>": 3,
+            "<sep>": 4,
+            "<system>": 5,
+            "<user>": 6,
+            "<assistant>": 7,
+            "<nl>": 8,
+        },
         "vocab_size": 32_000,
-        "vocab": [{"id": index, "token": f"tok{index}", "count": 1} for index in range(16)],
+        "vocab": vocab,
     }
     tokenizer_path.write_text(json.dumps(tokenizer, sort_keys=True) + "\n", encoding="utf-8")
     training_path.write_text("{}\n", encoding="utf-8")
     sequence_plan_path.write_text("{}\n", encoding="utf-8")
     metadata_path.write_text(
         json.dumps({"record_id": "one", "data_split": "DEV"}, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    sequence_report = {
-        "schema_version": "v0",
-        "run_id": "test-proof-run",
-        "status": "materialized",
-        "context_tokens": 8192,
-        "materialization": {
-            "kept_records": 3,
-            "excluded_records": report_excluded_records,
-            "full_records": 3,
-            "truncated_records": 0,
-            "input_tokens": 4096,
-            "loss_tokens": 64,
-            "unknown_tokens": 0,
-            "max_input_length": 128,
-            "by_split": {
-                "DEV": {
-                    "kept_records": 2,
-                    "excluded_records": 0,
-                    "full_records": 2,
-                    "truncated_records": 0,
-                    "input_tokens": 2048,
-                    "loss_tokens": 32,
-                    "unknown_tokens": 0,
-                    "max_input_length": 128,
-                },
-                "REPORT": {
-                    "kept_records": 1,
-                    "excluded_records": report_excluded_records,
-                    "full_records": 1,
-                    "truncated_records": 0,
-                    "input_tokens": 1024,
-                    "loss_tokens": 16,
-                    "unknown_tokens": 0,
-                    "max_input_length": 128,
-                },
-            },
-        },
-        "outputs": {
-            "metadata_path": str(proof_sequence_metadata_path("test-proof-run")),
-            "metadata_sha256": _sha256(metadata_path),
-            "report_path": str(proof_sequence_report_path("test-proof-run")),
-        },
-    }
-    sequence_report_path.write_text(
-        json.dumps(sequence_report, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     handoff = {
@@ -194,6 +258,63 @@ def _write_ready_job_inputs(
         },
     }
     handoff_path.write_text(json.dumps(handoff, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    sequence_report = {
+        "schema_version": "v0",
+        "run_id": "test-proof-run",
+        "status": "materialized",
+        "context_tokens": 8192,
+        "input_checks": {
+            "handoff": {
+                "path": "artifacts/train-runs/gctx1-proof-model.v0.handoff.json",
+                "sha256": sequence_handoff_sha or _sha256(handoff_path),
+            },
+            "sequence_plan": {
+                "path": str(proof_train_sequence_plan_path("test-proof-run")),
+                "sha256": _sha256(sequence_plan_path),
+            },
+        },
+        "materialization": {
+            "kept_records": 3,
+            "excluded_records": report_excluded_records,
+            "full_records": 3,
+            "truncated_records": 0,
+            "input_tokens": 4096,
+            "loss_tokens": 64,
+            "unknown_tokens": 0,
+            "max_input_length": 128,
+            "by_split": {
+                "DEV": {
+                    "kept_records": 2,
+                    "excluded_records": 0,
+                    "full_records": 2,
+                    "truncated_records": 0,
+                    "input_tokens": 2048,
+                    "loss_tokens": 32,
+                    "unknown_tokens": 0,
+                    "max_input_length": 128,
+                },
+                "REPORT": {
+                    "kept_records": 1,
+                    "excluded_records": report_excluded_records,
+                    "full_records": 1,
+                    "truncated_records": 0,
+                    "input_tokens": 1024,
+                    "loss_tokens": 16,
+                    "unknown_tokens": 0,
+                    "max_input_length": 128,
+                },
+            },
+        },
+        "outputs": {
+            "metadata_path": str(proof_sequence_metadata_path("test-proof-run")),
+            "metadata_sha256": _sha256(metadata_path),
+            "report_path": str(proof_sequence_report_path("test-proof-run")),
+        },
+    }
+    sequence_report_path.write_text(
+        json.dumps(sequence_report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     return handoff_path
 
 

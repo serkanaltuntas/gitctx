@@ -61,11 +61,18 @@ def create_proof_trainer_job(
     selected_handoff_path = _data_path(data_dir, Path(handoff_path))
     handoff = _load_json(selected_handoff_path)
     blockers = _handoff_blockers(handoff)
+    _check_handoff_input(data_dir, handoff, "training_artifact", blockers)
     tokenizer = _load_tokenizer(data_dir, handoff, blockers)
     sequence_report = _load_sequence_report(data_dir, run_id, blockers)
     sequence_metadata_path = data_dir / proof_sequence_metadata_path(run_id)
     sequence_plan_path = data_dir / proof_train_sequence_plan_path(run_id)
-    _check_sequence_inputs(sequence_report, sequence_metadata_path, sequence_plan_path, blockers)
+    _check_sequence_inputs(
+        sequence_report,
+        sequence_metadata_path,
+        sequence_plan_path,
+        selected_handoff_path,
+        blockers,
+    )
 
     target_parameter_range = handoff.get("training_contract", {}).get("target_parameter_range")
     vocab_size = _tokenizer_vocab_size(tokenizer, blockers)
@@ -146,6 +153,7 @@ def validate_proof_trainer_job(data_dir: str | Path, *, run_id: str) -> dict[str
         errors.append("job status is not ready_for_trainer")
     if job.get("blockers") != []:
         errors.append("job blockers must be empty")
+    _validate_job_input_hashes(data_dir, job, errors)
     model_contract = job.get("model_contract", {})
     if not isinstance(model_contract, dict):
         errors.append("model_contract must be an object")
@@ -224,6 +232,8 @@ def _load_tokenizer(
         return {}
     expected_sha = _input_sha(handoff, "tokenizer")
     actual_sha = _sha256(path)
+    if expected_sha is None:
+        blockers.append("tokenizer sha256 is missing from handoff")
     if isinstance(expected_sha, str) and actual_sha != expected_sha:
         blockers.append("tokenizer sha256 mismatch")
     return _load_json(path)
@@ -244,16 +254,34 @@ def _check_sequence_inputs(
     sequence_report: dict[str, Any],
     sequence_metadata_path: Path,
     sequence_plan_path: Path,
+    handoff_path: Path,
     blockers: list[str],
 ) -> None:
+    outputs = _as_mapping(sequence_report.get("outputs"))
+    input_checks = _as_mapping(sequence_report.get("input_checks"))
+    sequence_plan_check = _as_mapping(input_checks.get("sequence_plan"))
+    handoff_check = _as_mapping(input_checks.get("handoff"))
     if not sequence_metadata_path.exists():
         blockers.append("sequence metadata is missing")
     else:
-        expected_sha = sequence_report.get("outputs", {}).get("metadata_sha256")
-        if isinstance(expected_sha, str) and expected_sha != _sha256(sequence_metadata_path):
+        expected_sha = outputs.get("metadata_sha256")
+        if not isinstance(expected_sha, str):
+            blockers.append("sequence report metadata sha256 is missing")
+        elif expected_sha != _sha256(sequence_metadata_path):
             blockers.append("sequence metadata sha256 mismatch")
     if not sequence_plan_path.exists():
         blockers.append("sequence plan is missing")
+    else:
+        expected_plan_sha = sequence_plan_check.get("sha256")
+        if not isinstance(expected_plan_sha, str):
+            blockers.append("sequence report sequence-plan sha256 is missing")
+        elif expected_plan_sha != _sha256(sequence_plan_path):
+            blockers.append("sequence plan sha256 mismatch")
+    expected_handoff_sha = handoff_check.get("sha256")
+    if not isinstance(expected_handoff_sha, str):
+        blockers.append("sequence report handoff sha256 is missing")
+    elif expected_handoff_sha != _sha256(handoff_path):
+        blockers.append("sequence report handoff sha256 mismatch")
 
 
 def _model_contract(
@@ -353,6 +381,70 @@ def _check_data_contract(
         blockers.append("REPORT eval records are missing")
 
 
+def _check_handoff_input(
+    data_dir: Path,
+    handoff: dict[str, Any],
+    input_name: str,
+    blockers: list[str],
+) -> None:
+    path = _input_path(data_dir, handoff, input_name, blockers)
+    if path is None:
+        return
+    expected_sha = _input_sha(handoff, input_name)
+    if expected_sha is None:
+        blockers.append(f"{input_name} sha256 is missing from handoff")
+    if not path.exists():
+        blockers.append(f"{input_name} input is missing")
+        return
+    actual_sha = _sha256(path)
+    if isinstance(expected_sha, str) and actual_sha != expected_sha:
+        blockers.append(f"{input_name} sha256 mismatch")
+
+
+def _validate_job_input_hashes(
+    data_dir: Path,
+    job: dict[str, Any],
+    errors: list[str],
+) -> None:
+    inputs = job.get("inputs")
+    if not isinstance(inputs, dict):
+        errors.append("inputs must be an object")
+        return
+    for name, entry in sorted(inputs.items()):
+        if not isinstance(entry, dict):
+            errors.append(f"inputs.{name}: entry must be an object")
+            continue
+        path_value = entry.get("path")
+        if not isinstance(path_value, str):
+            errors.append(f"inputs.{name}: path is missing")
+            continue
+        path = _data_path(data_dir, Path(path_value))
+        if entry.get("ok") is False:
+            errors.append(f"inputs.{name}: manifest says input is not ok")
+        if not path.exists():
+            errors.append(f"inputs.{name}: file is missing")
+            continue
+        actual_sha = _sha256(path)
+        hash_fields = {
+            "sha256": "manifest",
+            "actual_sha256": "recorded actual sha256",
+            "expected_sha256": "expected sha256",
+        }
+        present_hashes = 0
+        for field_name, label in hash_fields.items():
+            recorded_sha = entry.get(field_name)
+            if recorded_sha is None:
+                continue
+            if not isinstance(recorded_sha, str):
+                errors.append(f"inputs.{name}.{field_name}: must be a string")
+                continue
+            present_hashes += 1
+            if recorded_sha != actual_sha:
+                errors.append(f"inputs.{name}: current sha256 does not match {label}")
+        if present_hashes == 0:
+            errors.append(f"inputs.{name}: sha256 is missing")
+
+
 def _checkpoint_contract(run_id: str) -> dict[str, Any]:
     checkpoint_dir = TRAIN_RUN_DIR / run_id / "checkpoints"
     return {
@@ -401,12 +493,22 @@ def _eval_contract(run_id: str, handoff: dict[str, Any]) -> dict[str, Any]:
 
 
 def _tokenizer_vocab_size(tokenizer: dict[str, Any], blockers: list[str]) -> int | None:
+    special_tokens = tokenizer.get("special_tokens")
+    if not isinstance(special_tokens, dict):
+        blockers.append("tokenizer special_tokens is missing")
+    else:
+        for token in SPECIAL_TOKENS:
+            if not isinstance(special_tokens.get(token), int):
+                blockers.append(f"tokenizer special token {token} is missing")
     value = tokenizer.get("vocab_size")
-    if isinstance(value, int):
-        return value
     vocab = tokenizer.get("vocab")
     if isinstance(vocab, list):
+        if isinstance(value, int) and len(vocab) != value:
+            blockers.append("tokenizer vocab_size does not match vocab length")
+            return value
         return len(vocab)
+    if isinstance(value, int):
+        return value
     blockers.append("tokenizer vocab_size is missing")
     return None
 
@@ -495,6 +597,10 @@ def _input_sha(handoff: dict[str, Any], input_name: str) -> str | None:
     entry = inputs.get(input_name) if isinstance(inputs, dict) else None
     value = entry.get("sha256") if isinstance(entry, dict) else None
     return value if isinstance(value, str) else None
+
+
+def _as_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def _write_job(data_dir: Path, *, run_id: str, job: dict[str, Any]) -> None:
