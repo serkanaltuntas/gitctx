@@ -152,6 +152,8 @@ make gctx1-proof-handoff
 make gctx1-proof-handoff-check
 make gctx1-proof-train-dry-run
 make gctx1-proof-train-dry-run-check
+make gctx1-proof-sequences
+make gctx1-proof-sequences-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
@@ -175,6 +177,9 @@ one supervised trainer sequence per kept record, preserves locked `REPORT`
 unless every `REPORT` example can be represented, and excludes only raw records
 above the configured raw-token cap from the first proof run. It is the setup
 proof for the future decoder-only trainer; it is not a model quality claim.
+The proof-sequences target consumes that plan and materializes deterministic
+trainer-input metadata hashes, including prefix/suffix crop decisions and
+loss-mask hashes, without storing full token-id payloads in the data repository.
 
 ## Recommended First Public Model
 

@@ -120,6 +120,8 @@ make gctx1-proof-handoff
 make gctx1-proof-handoff-check
 make gctx1-proof-train-dry-run
 make gctx1-proof-train-dry-run-check
+make gctx1-proof-sequences
+make gctx1-proof-sequences-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
@@ -168,6 +170,14 @@ receives one deterministic decision:
 `REPORT` exclusions block model-quality claims. `DEV` exclusions are acceptable
 only when the kept `DEV` count remains above the proof-run minimum. The default
 raw-token cap is 65,536 tokens for the GCTX-1 dry-run target.
+
+`gctx1-proof-sequences` consumes the sequence plan and materializes deterministic
+trainer-input metadata. The actual token-id arrays are generated in memory and
+hashed; the data repository stores only metadata, crop accounting, loss-token
+counts, and input/loss-mask hashes. This proves the exact crop and loss-mask
+contract without committing a large token-id payload. The real trainer must use
+the same materializer before replacing the no-weights dry-run checkpoint with
+resumable model checkpoints.
 
 `gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
 models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M

@@ -116,6 +116,8 @@ make gctx1-proof-handoff
 make gctx1-proof-handoff-check
 make gctx1-proof-train-dry-run
 make gctx1-proof-train-dry-run-check
+make gctx1-proof-sequences
+make gctx1-proof-sequences-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
