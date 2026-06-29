@@ -122,6 +122,8 @@ make gctx1-proof-train-dry-run
 make gctx1-proof-train-dry-run-check
 make gctx1-proof-sequences
 make gctx1-proof-sequences-check
+make gctx1-proof-sft-smoke
+make gctx1-proof-sft-smoke-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
@@ -178,6 +180,22 @@ counts, and input/loss-mask hashes. This proves the exact crop and loss-mask
 contract without committing a large token-id payload. The real trainer must use
 the same materializer before replacing the no-weights dry-run checkpoint with
 resumable model checkpoints.
+
+`gctx1-proof-sft-smoke` is the first bounded checkpoint/resume proof over those
+materialized sequences. It trains only on a deterministic `DEV` sample, updates a
+small dependency-free hashed weight vector, and writes:
+
+```text
+artifacts/train-runs/gctx1-proof-model.v0.dry-run.sft-smoke.report.json
+artifacts/train-runs/gctx1-proof-model.v0.dry-run.sft-smoke.checkpoint.json
+```
+
+Use `GCTX1_PROOF_SFT_SMOKE_MAX_RECORDS` to change the bounded sample size. Use
+`GCTX1_PROOF_SFT_SMOKE_STOP_AFTER` plus
+`GCTX1_PROOF_SFT_SMOKE_RESUME=1` to exercise the resume path. This target proves
+trainer sequence consumption, optimizer accounting, checkpoint writing, and
+resume determinism. It deliberately does not train on `REPORT`, does not train
+the 60M-100M proof language model, and does not establish model quality.
 
 `gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
 models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M

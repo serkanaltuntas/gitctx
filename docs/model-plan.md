@@ -154,6 +154,8 @@ make gctx1-proof-train-dry-run
 make gctx1-proof-train-dry-run-check
 make gctx1-proof-sequences
 make gctx1-proof-sequences-check
+make gctx1-proof-sft-smoke
+make gctx1-proof-sft-smoke-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
@@ -180,6 +182,12 @@ proof for the future decoder-only trainer; it is not a model quality claim.
 The proof-sequences target consumes that plan and materializes deterministic
 trainer-input metadata hashes, including prefix/suffix crop decisions and
 loss-mask hashes, without storing full token-id payloads in the data repository.
+The proof SFT smoke target then consumes the same materializer over a bounded
+`DEV` sample, updates a small dependency-free hashed weight vector, and writes a
+resumable checkpoint. It proves that selected trainer sequences, optimizer
+accounting, checkpoint state, and resume behavior are wired together while
+leaving locked `REPORT` untouched. It is still not the 60M-100M proof language
+model and not a model-quality claim.
 
 ## Recommended First Public Model
 
