@@ -122,6 +122,8 @@ make gctx1-proof-sft-smoke
 make gctx1-proof-sft-smoke-check
 make gctx1-proof-trainer-job
 make gctx1-proof-trainer-job-check
+make gctx1-proof-lm-train GCTX1_PROOF_LM_MAX_RECORDS=32 GCTX1_PROOF_LM_MAX_STEPS=8
+make gctx1-proof-lm-train-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```

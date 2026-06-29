@@ -212,6 +212,26 @@ the future real training job. A ready job manifest still does not mean training
 has happened; it means the inputs and expected trainer outputs are now explicit
 and validated before spending GPU time.
 
+`gctx1-proof-lm-train` is the first real decoder-only language-model training
+entrypoint:
+
+```text
+artifacts/train-runs/gctx1-proof-model.v0.dry-run.trainer.report.json
+artifacts/train-runs/gctx1-proof-model.v0.dry-run/checkpoints/latest.json
+artifacts/train-runs/gctx1-proof-model.v0.dry-run/checkpoints/final.json
+```
+
+It requires a PyTorch runtime, reads the ready trainer job manifest, verifies
+input hashes, re-materializes deterministic DEV sequences from the lineage
+artifacts, and trains with causal cross entropy only over assistant loss tokens.
+The first backend implements the proof architecture directly enough to exercise
+the real checkpoint/resume surface: token embeddings, learned positions, RMSNorm,
+GQA causal self-attention, SwiGLU MLP blocks, tied output weights, AdamW, and
+deterministic cursor-based resume. Use `GCTX1_PROOF_LM_MAX_RECORDS` and
+`GCTX1_PROOF_LM_MAX_STEPS` for bounded CPU smoke runs. A full unbounded run is
+the expensive proof-model training job and still needs locked `REPORT`
+evaluation before any quality claim.
+
 `gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
 models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M
 proof language-model run.

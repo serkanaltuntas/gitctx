@@ -158,6 +158,8 @@ make gctx1-proof-sft-smoke
 make gctx1-proof-sft-smoke-check
 make gctx1-proof-trainer-job
 make gctx1-proof-trainer-job-check
+make gctx1-proof-lm-train GCTX1_PROOF_LM_MAX_RECORDS=32 GCTX1_PROOF_LM_MAX_STEPS=8
+make gctx1-proof-lm-train-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
@@ -195,6 +197,14 @@ contract for the actual decoder-only trainer. It records the selected
 60M-100M-range model shape, sequence metadata hash, checkpoint paths, resume
 requirements, and locked `REPORT` eval outputs before any expensive training
 job starts.
+The proof LM trainer target is the first real PyTorch decoder-only training
+entrypoint. It reads that trainer job manifest, re-materializes the same DEV
+sequences, trains only on assistant loss tokens, and writes resumable
+checkpoint manifests plus a trainer report. PyTorch remains an optional runtime
+dependency for the public package: environments without it receive an explicit
+backend blocker instead of a silent partial run. Bounded `GCTX1_PROOF_LM_*`
+limits can be used for CPU smoke runs; removing those limits is the expensive
+proof-model training path.
 
 ## Recommended First Public Model
 
