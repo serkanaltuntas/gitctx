@@ -156,6 +156,8 @@ make gctx1-proof-sequences
 make gctx1-proof-sequences-check
 make gctx1-proof-sft-smoke
 make gctx1-proof-sft-smoke-check
+make gctx1-proof-trainer-job
+make gctx1-proof-trainer-job-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
@@ -188,6 +190,11 @@ resumable checkpoint. It proves that selected trainer sequences, optimizer
 accounting, checkpoint state, and resume behavior are wired together while
 leaving locked `REPORT` untouched. It is still not the 60M-100M proof language
 model and not a model-quality claim.
+The proof trainer job target writes the next manifest: a ready-or-blocked
+contract for the actual decoder-only trainer. It records the selected
+60M-100M-range model shape, sequence metadata hash, checkpoint paths, resume
+requirements, and locked `REPORT` eval outputs before any expensive training
+job starts.
 
 ## Recommended First Public Model
 

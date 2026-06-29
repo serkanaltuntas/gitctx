@@ -120,6 +120,8 @@ make gctx1-proof-sequences
 make gctx1-proof-sequences-check
 make gctx1-proof-sft-smoke
 make gctx1-proof-sft-smoke-check
+make gctx1-proof-trainer-job
+make gctx1-proof-trainer-job-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```

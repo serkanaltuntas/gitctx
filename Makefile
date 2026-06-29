@@ -61,6 +61,8 @@ GCTX1_PROOF_SFT_SMOKE_STOP_AFTER ?=
 GCTX1_PROOF_SFT_SMOKE_STOP_FLAG = $(if $(GCTX1_PROOF_SFT_SMOKE_STOP_AFTER),--stop-after-records "$(GCTX1_PROOF_SFT_SMOKE_STOP_AFTER)")
 GCTX1_PROOF_SFT_SMOKE_RESUME ?= 0
 GCTX1_PROOF_SFT_SMOKE_RESUME_FLAG = $(if $(filter 1 true yes,$(GCTX1_PROOF_SFT_SMOKE_RESUME)),--resume)
+GCTX1_PROOF_TRAINER_JOB = $(GITCTX_DATA_DIR)/artifacts/train-runs/$(GCTX1_PROOF_RUN_ID).trainer-job.json
+GCTX1_PROOF_TRAINER_SEED ?= 17
 GCTX1_MAX_RAW_RECORD_TOKENS ?= 65536
 GCTX1_LONG_RECORD_SAMPLE_LIMIT ?= 20
 GCTX1_TOKENIZER_VERSION ?= regex-diff-v0
@@ -72,7 +74,7 @@ GCTX1_PROTOTYPE_REPORT = $(GITCTX_DATA_DIR)/artifacts/eval/path-type-v0.$(GCTX1_
 GCTX1_NEURAL_REPORT = $(GITCTX_DATA_DIR)/artifacts/eval/tiny-softmax-v0.$(GCTX1_PROOF_ARTIFACT).v0.report.report.json
 
 .PHONY: data-dir smoke smoke-check smoke-finalize pilot-source pilot-source-check pilot-source-finalize pilot-review-template pilot-review-policy pilot-review-check smoke-review-template smoke-review-check teacher-inputs teacher-input-check pilot-teacher-source-check pilot-teacher-inputs pilot-teacher-input-check teacher-generate teacher-generate-check pilot-teacher-generate pilot-teacher-generate-check generated-review-template generated-review-check pilot-generated-review-template pilot-generated-review-policy pilot-generated-review-check pilot-train-artifact pilot-train-artifact-check merge-train-artifact artifact-eval-baseline artifact-split-inspection proof-readiness training-smoke-train training-smoke-eval training-smoke neural-smoke-train neural-smoke-eval neural-smoke split-readiness pilot-eval-baseline test fixture-eval
-.PHONY: gctx1-tokenizer gctx1-tokenizer-check gctx1-proof-config-check gctx1-proof-readiness gctx1-proof-handoff gctx1-proof-handoff-check gctx1-proof-train-dry-run gctx1-proof-train-dry-run-check gctx1-proof-sequences gctx1-proof-sequences-check gctx1-proof-sft-smoke gctx1-proof-sft-smoke-check gctx1-proof-smoke gctx1-proof-smoke-check
+.PHONY: gctx1-tokenizer gctx1-tokenizer-check gctx1-proof-config-check gctx1-proof-readiness gctx1-proof-handoff gctx1-proof-handoff-check gctx1-proof-train-dry-run gctx1-proof-train-dry-run-check gctx1-proof-sequences gctx1-proof-sequences-check gctx1-proof-sft-smoke gctx1-proof-sft-smoke-check gctx1-proof-trainer-job gctx1-proof-trainer-job-check gctx1-proof-smoke gctx1-proof-smoke-check
 
 data-dir:
 	mkdir -p "$(GITCTX_DATA_DIR)"
@@ -334,6 +336,20 @@ gctx1-proof-sft-smoke-check:
 		--run-id "$(GCTX1_PROOF_RUN_ID)"
 	$(PYTHON) -m json.tool "$(GCTX1_PROOF_SFT_SMOKE_REPORT)"
 	$(PYTHON) -m json.tool "$(GCTX1_PROOF_SFT_SMOKE_CHECKPOINT)"
+
+gctx1-proof-trainer-job:
+	PYTHONPATH=src $(PYTHON) -m gitctx.proof_train_job --data-dir "$(GITCTX_DATA_DIR)" create \
+		--handoff "$(GCTX1_PROOF_HANDOFF)" \
+		--run-id "$(GCTX1_PROOF_RUN_ID)" \
+		--seed "$(GCTX1_PROOF_TRAINER_SEED)" \
+		--write \
+		--fail-on-blocked
+	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
+
+gctx1-proof-trainer-job-check:
+	PYTHONPATH=src $(PYTHON) -m gitctx.proof_train_job --data-dir "$(GITCTX_DATA_DIR)" validate \
+		--run-id "$(GCTX1_PROOF_RUN_ID)"
+	$(PYTHON) -m json.tool "$(GCTX1_PROOF_TRAINER_JOB)"
 
 gctx1-proof-smoke:
 	$(MAKE) training-smoke \

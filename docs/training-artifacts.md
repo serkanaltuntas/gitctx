@@ -124,6 +124,8 @@ make gctx1-proof-sequences
 make gctx1-proof-sequences-check
 make gctx1-proof-sft-smoke
 make gctx1-proof-sft-smoke-check
+make gctx1-proof-trainer-job
+make gctx1-proof-trainer-job-check
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
@@ -196,6 +198,19 @@ Use `GCTX1_PROOF_SFT_SMOKE_MAX_RECORDS` to change the bounded sample size. Use
 trainer sequence consumption, optimizer accounting, checkpoint writing, and
 resume determinism. It deliberately does not train on `REPORT`, does not train
 the 60M-100M proof language model, and does not establish model quality.
+
+`gctx1-proof-trainer-job` writes the actual proof-trainer job contract:
+
+```text
+artifacts/train-runs/gctx1-proof-model.v0.dry-run.trainer-job.json
+```
+
+The manifest records the bounded decoder-only model shape, estimated parameter
+count, sequence metadata hash, checkpoint output paths, resume requirements,
+and locked `REPORT` eval outputs. It is the handoff from artifact preparation to
+the future real training job. A ready job manifest still does not mean training
+has happened; it means the inputs and expected trainer outputs are now explicit
+and validated before spending GPU time.
 
 `gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
 models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M
