@@ -62,7 +62,7 @@ def run_proof_sft_smoke(
     """Run a deterministic checkpoint/resume smoke over materialized SFT records."""
 
     _validate_identifier(run_id, "run_id")
-    _validate_split(train_split)
+    _validate_train_split(train_split)
     if max_records < 1:
         raise ValueError("max_records must be positive")
     if model_buckets < 1:
@@ -89,7 +89,9 @@ def run_proof_sft_smoke(
     state = _initial_state(model_buckets=model_buckets)
     resumed_from_checkpoint = False
     checkpoint_path = data_dir / proof_sft_smoke_checkpoint_path(run_id)
-    if resume and checkpoint_path.exists():
+    if resume and not checkpoint_path.exists():
+        raise ValueError("resume requested but checkpoint is missing")
+    if resume:
         checkpoint = _load_json(checkpoint_path)
         _validate_resume_checkpoint(
             checkpoint,
@@ -520,11 +522,17 @@ def _validate_resume_checkpoint(
         raise ValueError("resume checkpoint run_id mismatch")
     if checkpoint.get("trainer_id") != SFT_SMOKE_TRAINER_ID:
         raise ValueError("resume checkpoint trainer_id mismatch")
+    if checkpoint.get("status") not in {"partial", "trained"}:
+        raise ValueError("resume checkpoint status must be partial or trained")
     if checkpoint.get("config_sha256") != config_sha256:
         raise ValueError("resume checkpoint config mismatch")
     model = checkpoint.get("model", {})
     weights = model.get("weight_units") if isinstance(model, dict) else None
-    if not isinstance(weights, list) or len(weights) != model_buckets:
+    if (
+        not isinstance(weights, list)
+        or len(weights) != model_buckets
+        or not all(isinstance(value, int) for value in weights)
+    ):
         raise ValueError("resume checkpoint weight shape mismatch")
     if model.get("weight_sha256") != _hash_ints(weights):
         raise ValueError("resume checkpoint weight hash mismatch")
@@ -630,6 +638,12 @@ def _validate_identifier(value: str, name: str) -> None:
 def _validate_split(value: str) -> None:
     if value not in {"DEV", "REPORT", "HELD_OUT"}:
         raise ValueError("split must be DEV, REPORT, or HELD_OUT")
+
+
+def _validate_train_split(value: str) -> None:
+    _validate_split(value)
+    if value != DEFAULT_TRAIN_SPLIT:
+        raise ValueError("proof SFT smoke may train only on DEV")
 
 
 def _print_report(report: dict[str, Any]) -> None:

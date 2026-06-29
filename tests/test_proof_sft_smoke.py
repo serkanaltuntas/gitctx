@@ -88,6 +88,70 @@ class ProofSftSmokeTests(unittest.TestCase):
             )
             self.assertEqual(resume_checkpoint["record_cursor"], full_checkpoint["record_cursor"])
 
+    def test_resume_requires_existing_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff_path = _prepare_sequence_artifacts(root, run_id="missing-checkpoint-run")
+
+            with self.assertRaisesRegex(ValueError, "resume requested but checkpoint is missing"):
+                run_proof_sft_smoke(
+                    root,
+                    handoff_path=handoff_path,
+                    run_id="missing-checkpoint-run",
+                    max_records=2,
+                    resume=True,
+                    write=True,
+                )
+
+            self.assertFalse(
+                (root / proof_sft_smoke_checkpoint_path("missing-checkpoint-run")).exists()
+            )
+
+    def test_training_smoke_refuses_locked_report_split(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff_path = _prepare_sequence_artifacts(root, run_id="report-run")
+
+            with self.assertRaisesRegex(ValueError, "proof SFT smoke may train only on DEV"):
+                run_proof_sft_smoke(
+                    root,
+                    handoff_path=handoff_path,
+                    run_id="report-run",
+                    train_split="REPORT",
+                    max_records=1,
+                )
+
+    def test_resume_rejects_malformed_weight_units(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            handoff_path = _prepare_sequence_artifacts(root, run_id="malformed-run")
+            run_proof_sft_smoke(
+                root,
+                handoff_path=handoff_path,
+                run_id="malformed-run",
+                max_records=3,
+                stop_after_records=1,
+                write=True,
+            )
+            checkpoint_path = root / proof_sft_smoke_checkpoint_path("malformed-run")
+            checkpoint = _load_json(checkpoint_path)
+            checkpoint["model"]["weight_units"] = [
+                str(value) for value in checkpoint["model"]["weight_units"]
+            ]
+            checkpoint_path.write_text(
+                json.dumps(checkpoint, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "resume checkpoint weight shape mismatch"):
+                run_proof_sft_smoke(
+                    root,
+                    handoff_path=handoff_path,
+                    run_id="malformed-run",
+                    max_records=3,
+                    resume=True,
+                )
+
 
 def _prepare_sequence_artifacts(root: Path, *, run_id: str) -> Path:
     handoff_path = _write_ready_handoff(root)
