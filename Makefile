@@ -49,6 +49,9 @@ GCTX1_PROOF_HANDOFF = $(GITCTX_DATA_DIR)/artifacts/train-runs/gctx1-proof-model.
 GCTX1_PROOF_RUN_ID ?= gctx1-proof-model.v0.dry-run
 GCTX1_PROOF_TRAIN_REPORT = $(GITCTX_DATA_DIR)/artifacts/train-runs/$(GCTX1_PROOF_RUN_ID).report.json
 GCTX1_PROOF_TRAIN_CHECKPOINT = $(GITCTX_DATA_DIR)/artifacts/train-runs/$(GCTX1_PROOF_RUN_ID).checkpoint.json
+GCTX1_PROOF_SEQUENCE_PLAN = $(GITCTX_DATA_DIR)/artifacts/train-runs/$(GCTX1_PROOF_RUN_ID).sequence-plan.jsonl
+GCTX1_MAX_RAW_RECORD_TOKENS ?= 65536
+GCTX1_LONG_RECORD_SAMPLE_LIMIT ?= 20
 GCTX1_TOKENIZER_VERSION ?= regex-diff-v0
 GCTX1_TOKENIZER_VOCAB_SIZE ?= 32000
 GCTX1_TOKENIZER_MIN_FREQUENCY ?= 2
@@ -275,6 +278,8 @@ gctx1-proof-train-dry-run:
 	PYTHONPATH=src $(PYTHON) -m gitctx.proof_train --data-dir "$(GITCTX_DATA_DIR)" dry-run \
 		--handoff "$(GCTX1_PROOF_HANDOFF)" \
 		--run-id "$(GCTX1_PROOF_RUN_ID)" \
+		--max-raw-record-tokens "$(GCTX1_MAX_RAW_RECORD_TOKENS)" \
+		--long-record-sample-limit "$(GCTX1_LONG_RECORD_SAMPLE_LIMIT)" \
 		--write \
 		--fail-on-blocked
 	PYTHONPATH=src $(PYTHON) -m gitctx.data_artifacts --data-dir "$(GITCTX_DATA_DIR)" write-checksums
@@ -284,6 +289,7 @@ gctx1-proof-train-dry-run-check:
 		--run-id "$(GCTX1_PROOF_RUN_ID)"
 	$(PYTHON) -m json.tool "$(GCTX1_PROOF_TRAIN_REPORT)"
 	$(PYTHON) -m json.tool "$(GCTX1_PROOF_TRAIN_CHECKPOINT)"
+	wc -l "$(GCTX1_PROOF_SEQUENCE_PLAN)"
 
 gctx1-proof-smoke:
 	$(MAKE) training-smoke \

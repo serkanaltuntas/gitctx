@@ -17,6 +17,9 @@ from gitctx.proof_tokenizer import record_tokens
 TRAIN_RUN_DIR = Path("artifacts/train-runs")
 DEFAULT_RUN_ID = "gctx1-proof-model.v0.dry-run"
 SCHEMA_VERSION = "v0"
+SEQUENCE_POLICY_ID = "gctx1-proof-sequence-policy-v0"
+DEFAULT_MAX_RAW_RECORD_TOKENS = 65_536
+DEFAULT_LONG_RECORD_SAMPLE_LIMIT = 20
 
 
 def proof_train_report_path(run_id: str) -> Path:
@@ -33,12 +36,21 @@ def proof_train_checkpoint_path(run_id: str) -> Path:
     return TRAIN_RUN_DIR / f"{run_id}.checkpoint.json"
 
 
+def proof_train_sequence_plan_path(run_id: str) -> Path:
+    """Return the proof-trainer sequence-plan path for a run id."""
+
+    _validate_identifier(run_id, "run_id")
+    return TRAIN_RUN_DIR / f"{run_id}.sequence-plan.jsonl"
+
+
 def dry_run_proof_training(
     data_dir: str | Path,
     *,
     handoff_path: str | Path,
     run_id: str = DEFAULT_RUN_ID,
     max_records_per_split: int | None = None,
+    max_raw_record_tokens: int = DEFAULT_MAX_RAW_RECORD_TOKENS,
+    long_record_sample_limit: int = DEFAULT_LONG_RECORD_SAMPLE_LIMIT,
     require_torch: bool = False,
     write: bool = False,
 ) -> dict[str, Any]:
@@ -47,6 +59,10 @@ def dry_run_proof_training(
     _validate_identifier(run_id, "run_id")
     if max_records_per_split is not None and max_records_per_split < 1:
         raise ValueError("max_records_per_split must be positive")
+    if max_raw_record_tokens < 1:
+        raise ValueError("max_raw_record_tokens must be positive")
+    if long_record_sample_limit < 0:
+        raise ValueError("long_record_sample_limit must not be negative")
 
     data_dir = Path(data_dir)
     selected_handoff_path = _data_path(data_dir, Path(handoff_path))
@@ -64,13 +80,17 @@ def dry_run_proof_training(
     tokenizer = _load_input_json(data_dir, handoff, "tokenizer", blockers)
     training_path = _input_path(data_dir, handoff, "training_artifact", blockers)
     tokenization = _empty_tokenization_summary()
+    sequence_plan_records: list[dict[str, Any]] = []
     if tokenizer is not None and training_path is not None and training_path.exists():
-        tokenization = _tokenization_summary(
+        tokenization, sequence_plan_records = _tokenization_summary(
             training_path,
             tokenizer=tokenizer,
             context_tokens=_context_tokens(handoff),
             max_records_per_split=max_records_per_split,
+            max_raw_record_tokens=max_raw_record_tokens,
+            long_record_sample_limit=long_record_sample_limit,
         )
+        blockers.extend(_sequence_policy_blockers(tokenization, handoff=handoff))
 
     status = "dry_run_passed" if not blockers else "blocked"
     report = {
@@ -97,6 +117,8 @@ def dry_run_proof_training(
         "outputs": {
             "checkpoint_path": str(proof_train_checkpoint_path(run_id)),
             "report_path": str(proof_train_report_path(run_id)),
+            "sequence_plan_path": str(proof_train_sequence_plan_path(run_id)),
+            "sequence_plan_sha256": None,
         },
         "claim_policy": (
             "Dry-run artifacts validate trainer inputs and accounting only; "
@@ -105,7 +127,13 @@ def dry_run_proof_training(
     }
     checkpoint = _checkpoint_skeleton(report, handoff=handoff)
     if write:
-        _write_run_artifacts(data_dir, run_id=run_id, report=report, checkpoint=checkpoint)
+        _write_run_artifacts(
+            data_dir,
+            run_id=run_id,
+            report=report,
+            checkpoint=checkpoint,
+            sequence_plan_records=sequence_plan_records,
+        )
     _print_report(report)
     return report
 
@@ -117,6 +145,7 @@ def validate_proof_training_run(data_dir: str | Path, *, run_id: str) -> dict[st
     data_dir = Path(data_dir)
     report_path = data_dir / proof_train_report_path(run_id)
     checkpoint_path = data_dir / proof_train_checkpoint_path(run_id)
+    sequence_plan_path = data_dir / proof_train_sequence_plan_path(run_id)
     report = json.loads(report_path.read_text(encoding="utf-8"))
     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
     errors: list[str] = []
@@ -130,12 +159,24 @@ def validate_proof_training_run(data_dir: str | Path, *, run_id: str) -> dict[st
         errors.append("dry-run checkpoint must not contain model weights")
     if checkpoint.get("report_sha256") != _sha256(report_path):
         errors.append("checkpoint report_sha256 does not match report")
+    if not sequence_plan_path.exists():
+        errors.append("sequence plan is missing")
+        sequence_plan_records = []
+    else:
+        sequence_plan_records = list(_iter_jsonl(sequence_plan_path))
+        expected_plan_sha = report.get("outputs", {}).get("sequence_plan_sha256")
+        if isinstance(expected_plan_sha, str) and expected_plan_sha != _sha256(sequence_plan_path):
+            errors.append("sequence plan sha256 does not match report")
+        processed_records = report.get("tokenization", {}).get("processed_records")
+        if processed_records != len(sequence_plan_records):
+            errors.append("sequence plan record count does not match tokenization report")
     validation = {
         "run_id": run_id,
         "valid": not errors,
         "errors": errors,
         "report_path": str(proof_train_report_path(run_id)),
         "checkpoint_path": str(proof_train_checkpoint_path(run_id)),
+        "sequence_plan_path": str(proof_train_sequence_plan_path(run_id)),
     }
     for key, value in validation.items():
         if key != "errors":
@@ -210,7 +251,9 @@ def _tokenization_summary(
     tokenizer: dict[str, Any],
     context_tokens: int,
     max_records_per_split: int | None,
-) -> dict[str, Any]:
+    max_raw_record_tokens: int,
+    long_record_sample_limit: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     vocab = tokenizer.get("vocab")
     if not isinstance(vocab, list):
         raise ValueError("tokenizer vocab must be a list")
@@ -224,8 +267,16 @@ def _tokenization_summary(
     split_unknown = _split_counter()
     split_sequences = _split_counter()
     split_max_record_tokens = _split_counter()
+    split_full_records = _split_counter()
+    split_truncated_records = _split_counter()
+    split_excluded_records = _split_counter()
+    split_kept_trainer_tokens = _split_counter()
+    split_truncated_raw_tokens = _split_counter()
+    split_excluded_raw_tokens = _split_counter()
     total_records = 0
     processed_records = 0
+    sequence_plan_records: list[dict[str, Any]] = []
+    long_records: list[dict[str, Any]] = []
 
     for record in _iter_jsonl(training_path):
         split = record["data_split"]
@@ -236,17 +287,56 @@ def _tokenization_summary(
             split_unknown[split] = 0
             split_sequences[split] = 0
             split_max_record_tokens[split] = 0
+            split_full_records[split] = 0
+            split_truncated_records[split] = 0
+            split_excluded_records[split] = 0
+            split_kept_trainer_tokens[split] = 0
+            split_truncated_raw_tokens[split] = 0
+            split_excluded_raw_tokens[split] = 0
         if max_records_per_split is not None and split_counts[split] >= max_records_per_split:
             continue
         tokens = record_tokens(record)
         unknown = sum(1 for token in tokens if token not in token_to_id)
         token_count = len(tokens)
+        sequence_count = math.ceil(token_count / context_tokens)
+        decision, reason = _sequence_decision(
+            token_count,
+            context_tokens=context_tokens,
+            max_raw_record_tokens=max_raw_record_tokens,
+        )
+        trainer_sequence_tokens = 0 if decision == "exclude_oversize" else min(
+            token_count,
+            context_tokens,
+        )
         split_counts[split] += 1
         split_tokens[split] += token_count
         split_unknown[split] += unknown
-        split_sequences[split] += math.ceil(token_count / context_tokens)
+        split_sequences[split] += sequence_count
         split_max_record_tokens[split] = max(split_max_record_tokens[split], token_count)
+        if decision == "exclude_oversize":
+            split_excluded_records[split] += 1
+            split_excluded_raw_tokens[split] += token_count
+        elif decision == "use_truncated":
+            split_truncated_records[split] += 1
+            split_truncated_raw_tokens[split] += token_count - context_tokens
+            split_kept_trainer_tokens[split] += trainer_sequence_tokens
+        else:
+            split_full_records[split] += 1
+            split_kept_trainer_tokens[split] += trainer_sequence_tokens
         processed_records += 1
+        plan_record = _sequence_plan_record(
+            record,
+            raw_token_count=token_count,
+            unknown_token_count=unknown,
+            raw_sequences_at_context=sequence_count,
+            decision=decision,
+            reason=reason,
+            trainer_context_tokens=context_tokens,
+            trainer_sequence_tokens=trainer_sequence_tokens,
+        )
+        sequence_plan_records.append(plan_record)
+        if token_count > context_tokens:
+            long_records.append(plan_record)
 
     by_split = {}
     for split in sorted(split_counts):
@@ -259,7 +349,21 @@ def _tokenization_summary(
             "known_token_fraction": round((tokens - unknown) / tokens, 6) if tokens else 0.0,
             "sequences_at_context": split_sequences[split],
             "max_record_tokens": split_max_record_tokens[split],
+            "full_records": split_full_records[split],
+            "kept_records": split_full_records[split] + split_truncated_records[split],
+            "truncated_records": split_truncated_records[split],
+            "excluded_records": split_excluded_records[split],
+            "kept_trainer_tokens": split_kept_trainer_tokens[split],
+            "truncated_raw_tokens": split_truncated_raw_tokens[split],
+            "excluded_raw_tokens": split_excluded_raw_tokens[split],
         }
+    long_records.sort(key=lambda record: record["raw_token_count"], reverse=True)
+    sequence_policy = _sequence_policy_summary(
+        by_split,
+        context_tokens=context_tokens,
+        max_raw_record_tokens=max_raw_record_tokens,
+        long_records=long_records[:long_record_sample_limit],
+    )
     return {
         "tokenizer_version": tokenizer.get("tokenizer_version"),
         "vocab_size": tokenizer.get("vocab_size"),
@@ -267,8 +371,9 @@ def _tokenization_summary(
         "total_records_seen": total_records,
         "processed_records": processed_records,
         "max_records_per_split": max_records_per_split,
+        "sequence_policy": sequence_policy,
         "by_split": by_split,
-    }
+    }, sequence_plan_records
 
 
 def _checkpoint_skeleton(report: dict[str, Any], *, handoff: dict[str, Any]) -> dict[str, Any]:
@@ -292,12 +397,20 @@ def _write_run_artifacts(
     run_id: str,
     report: dict[str, Any],
     checkpoint: dict[str, Any],
+    sequence_plan_records: list[dict[str, Any]],
 ) -> None:
     report_path = data_dir / proof_train_report_path(run_id)
     checkpoint_path = data_dir / proof_train_checkpoint_path(run_id)
+    sequence_plan_path = data_dir / proof_train_sequence_plan_path(run_id)
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    sequence_plan_path.write_text(
+        "".join(json.dumps(record, sort_keys=True) + "\n" for record in sequence_plan_records),
+        encoding="utf-8",
+    )
+    report["outputs"]["sequence_plan_sha256"] = _sha256(sequence_plan_path)
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     checkpoint["report_sha256"] = _sha256(report_path)
+    checkpoint["sequence_plan_sha256"] = report["outputs"]["sequence_plan_sha256"]
     checkpoint_path.write_text(
         json.dumps(checkpoint, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -309,6 +422,12 @@ def _empty_tokenization_summary() -> dict[str, Any]:
         "context_tokens": None,
         "total_records_seen": 0,
         "processed_records": 0,
+        "sequence_policy": {
+            "id": SEQUENCE_POLICY_ID,
+            "status": "not_evaluated",
+            "max_raw_record_tokens": None,
+            "longest_records": [],
+        },
         "by_split": {},
     }
 
@@ -338,6 +457,116 @@ def _torch_status() -> dict[str, Any]:
 
 def _split_counter() -> dict[str, int]:
     return {"DEV": 0, "REPORT": 0, "HELD_OUT": 0}
+
+
+def _sequence_decision(
+    raw_token_count: int,
+    *,
+    context_tokens: int,
+    max_raw_record_tokens: int,
+) -> tuple[str, str]:
+    if raw_token_count > max_raw_record_tokens:
+        return "exclude_oversize", "raw_token_count exceeds max_raw_record_tokens"
+    if raw_token_count > context_tokens:
+        return "use_truncated", "raw_token_count exceeds context_tokens"
+    return "use_full", "raw_token_count fits context_tokens"
+
+
+def _sequence_plan_record(
+    record: dict[str, Any],
+    *,
+    raw_token_count: int,
+    unknown_token_count: int,
+    raw_sequences_at_context: int,
+    decision: str,
+    reason: str,
+    trainer_context_tokens: int,
+    trainer_sequence_tokens: int,
+) -> dict[str, Any]:
+    changed_paths = record.get("changed_paths")
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "policy_id": SEQUENCE_POLICY_ID,
+        "record_id": record.get("id"),
+        "source_diff_id": record.get("source_diff_id"),
+        "data_split": record.get("data_split"),
+        "source_repo_url": record.get("source_repo_url"),
+        "source_commit": record.get("source_commit"),
+        "parent_commit": record.get("parent_commit"),
+        "diff_sha256": record.get("diff_sha256"),
+        "changed_path_count": len(changed_paths) if isinstance(changed_paths, list) else None,
+        "raw_token_count": raw_token_count,
+        "unknown_token_count": unknown_token_count,
+        "raw_sequences_at_context": raw_sequences_at_context,
+        "decision": decision,
+        "reason": reason,
+        "trainer_context_tokens": trainer_context_tokens,
+        "trainer_sequence_tokens": trainer_sequence_tokens,
+    }
+
+
+def _sequence_policy_summary(
+    by_split: dict[str, dict[str, Any]],
+    *,
+    context_tokens: int,
+    max_raw_record_tokens: int,
+    long_records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    total_excluded = sum(split["excluded_records"] for split in by_split.values())
+    report_excluded = by_split.get("REPORT", {}).get("excluded_records", 0)
+    return {
+        "id": SEQUENCE_POLICY_ID,
+        "status": "blocked" if report_excluded else "ready",
+        "context_tokens": context_tokens,
+        "max_raw_record_tokens": max_raw_record_tokens,
+        "trainer_record_policy": (
+            "Use one supervised trainer sequence per kept record. Records that fit the "
+            "context are used whole; records over context but under the raw-token cap "
+            "must be deterministically cropped by the real trainer; records over the "
+            "raw-token cap are excluded from the first proof run."
+        ),
+        "crop_contract": (
+            "The real trainer must preserve system instructions and the assistant target, "
+            "then allocate remaining context to deterministic user/diff prefix and suffix "
+            "tokens."
+        ),
+        "exclusion_contract": (
+            "REPORT exclusions block quality claims. DEV exclusions are allowed only when "
+            "the kept DEV count remains above the proof-run minimum."
+        ),
+        "excluded_records": total_excluded,
+        "report_excluded_records": report_excluded,
+        "longest_records": long_records,
+    }
+
+
+def _sequence_policy_blockers(tokenization: dict[str, Any], *, handoff: dict[str, Any]) -> list[str]:
+    blockers = []
+    policy = tokenization.get("sequence_policy", {})
+    report_excluded = policy.get("report_excluded_records") if isinstance(policy, dict) else None
+    if isinstance(report_excluded, int) and report_excluded > 0:
+        blockers.append("sequence policy: REPORT contains excluded oversize records")
+    dev_minimum = _minimum_dev_records(handoff)
+    dev_summary = tokenization.get("by_split", {}).get("DEV", {})
+    kept_dev_records = dev_summary.get("kept_records") if isinstance(dev_summary, dict) else None
+    if (
+        isinstance(dev_minimum, int)
+        and isinstance(kept_dev_records, int)
+        and kept_dev_records < dev_minimum
+    ):
+        blockers.append(
+            "sequence policy: kept DEV records fall below minimum "
+            f"({kept_dev_records} < {dev_minimum})"
+        )
+    return blockers
+
+
+def _minimum_dev_records(handoff: dict[str, Any]) -> int | None:
+    readiness = handoff.get("readiness", {})
+    gates = readiness.get("gates", {}) if isinstance(readiness, dict) else {}
+    dev_gate = gates.get("dev_training_records") if isinstance(gates, dict) else None
+    minimum = dev_gate.get("minimum") if isinstance(dev_gate, dict) else None
+    return minimum if isinstance(minimum, int) else None
 
 
 def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
@@ -396,6 +625,12 @@ def main(argv: list[str] | None = None) -> int:
     dry_run.add_argument("--handoff", required=True)
     dry_run.add_argument("--run-id", default=DEFAULT_RUN_ID)
     dry_run.add_argument("--max-records-per-split", type=int)
+    dry_run.add_argument("--max-raw-record-tokens", type=int, default=DEFAULT_MAX_RAW_RECORD_TOKENS)
+    dry_run.add_argument(
+        "--long-record-sample-limit",
+        type=int,
+        default=DEFAULT_LONG_RECORD_SAMPLE_LIMIT,
+    )
     dry_run.add_argument("--require-torch", action="store_true")
     dry_run.add_argument("--write", action="store_true")
     dry_run.add_argument("--fail-on-blocked", action="store_true")
@@ -410,6 +645,8 @@ def main(argv: list[str] | None = None) -> int:
             handoff_path=args.handoff,
             run_id=args.run_id,
             max_records_per_split=args.max_records_per_split,
+            max_raw_record_tokens=args.max_raw_record_tokens,
+            long_record_sample_limit=args.long_record_sample_limit,
             require_torch=args.require_torch,
             write=args.write,
         )

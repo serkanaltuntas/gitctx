@@ -149,6 +149,26 @@ tokenized records and context windows by split, and writes a checkpoint skeleton
 that deliberately contains no model weights. This validates the trainer artifact
 contract before the 60M-100M decoder-only proof training job exists.
 
+The dry-run also writes:
+
+```text
+artifacts/train-runs/gctx1-proof-model.v0.dry-run.sequence-plan.jsonl
+```
+
+The sequence plan is the long-record policy artifact. Each reviewed SFT record
+receives one deterministic decision:
+
+- `use_full`: the raw tokenized record fits the proof context;
+- `use_truncated`: the record is over context but below the raw-token cap, so
+  the real trainer must apply deterministic prefix/suffix cropping while
+  preserving the system instruction and assistant target;
+- `exclude_oversize`: the raw tokenized record is above the raw-token cap and is
+  excluded from the first proof run.
+
+`REPORT` exclusions block model-quality claims. `DEV` exclusions are acceptable
+only when the kept `DEV` count remains above the proof-run minimum. The default
+raw-token cap is 65,536 tokens for the GCTX-1 dry-run target.
+
 `gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
 models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M
 proof language-model run.

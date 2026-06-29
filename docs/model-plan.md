@@ -169,8 +169,12 @@ config hash, training artifact hash, tokenizer hash, readiness gates, training
 code revision, and required trainer outputs. The proof-trainer dry-run target
 then verifies those handoff hashes, records local runtime capability, counts
 tokens and context windows by split, and writes a no-weights checkpoint skeleton.
-It is the setup proof for the future decoder-only trainer; it is not a model
-quality claim.
+It also writes a deterministic sequence plan that marks each record as
+`use_full`, `use_truncated`, or `exclude_oversize`. The first proof policy uses
+one supervised trainer sequence per kept record, preserves locked `REPORT`
+unless every `REPORT` example can be represented, and excludes only raw records
+above the configured raw-token cap from the first proof run. It is the setup
+proof for the future decoder-only trainer; it is not a model quality claim.
 
 ## Recommended First Public Model
 
