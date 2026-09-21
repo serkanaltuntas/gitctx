@@ -225,7 +225,7 @@ It requires a PyTorch runtime, reads the ready trainer job manifest, verifies
 input hashes, re-materializes deterministic DEV sequences from the lineage
 artifacts, and trains with causal cross entropy only over assistant loss tokens.
 The first backend implements the proof architecture directly enough to exercise
-the real checkpoint/resume surface: token embeddings, learned positions, RMSNorm,
+the real checkpoint/resume surface: token embeddings, rotary positions (RoPE), RMSNorm,
 GQA causal self-attention, SwiGLU MLP blocks, tied output weights, AdamW, and
 deterministic cursor-based resume. Use `GCTX1_PROOF_LM_MAX_RECORDS` and
 `GCTX1_PROOF_LM_MAX_STEPS` for bounded CPU smoke runs. A full unbounded run is
@@ -235,9 +235,7 @@ evaluation before any quality claim.
 On training workers with `uv`, prepare the optional PyTorch runtime explicitly:
 
 ```bash
-uv venv .venv
-uv pip install -e .
-uv pip install torch
+uv sync --locked --python 3.12
 ```
 
 Then run bounded proof LM training from the public repository while writing
@@ -251,6 +249,29 @@ make gctx1-proof-lm-train \
   GCTX1_PROOF_LM_MAX_STEPS=8
 make gctx1-proof-lm-train-check PYTHON=".venv/bin/python" GITCTX_DATA_DIR="../gitctx-data"
 ```
+
+The uv lock selects PyTorch 2.13.0 with CUDA 12.6 on Linux x86_64, and the
+standard PyPI package on other platforms (including macOS/MPS). GPU usability
+must be tested on the worker; the driver-reported CUDA version is not sufficient.
+The trainer currently uses FP32 for portability to older GPUs. Query-chunked
+attention, block/attention recomputation and projecting only supervised token
+positions reduce memory without shortening context or changing the loss.
+
+Trainer v1 uses RoPE and a conventional 0.02 normal initialization. Old v0
+learned-position checkpoints are deliberately incompatible. Use a new run ID.
+Resume checks model, optimizer settings, seed, input and implementation hashes;
+`--max-steps` is a cumulative limit and can be increased or omitted. `--max-records`
+can expand the same deterministic prefix. Device and memory execution settings
+are recorded but do not invalidate resume. Exact equality is tested on the same
+CPU runtime; cross-device arithmetic need not be bit-identical.
+
+`--checkpoint-every 100` saves during training. The latest two weight states are
+retained locally; weights are not committed. AdamW uses a constant learning rate
+(no scheduler). A run without limits makes one full pass over the selected DEV
+records. `--record-id` is only for explicitly bounded diagnostic selections;
+full proof runs must omit it and both limits. Reports include actual parameter
+count, execution time, software versions and CUDA peak memory. Checkpoint state
+files are loaded with PyTorch's restricted weights-only deserializer.
 
 `gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
 models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M

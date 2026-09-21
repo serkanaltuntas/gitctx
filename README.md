@@ -122,9 +122,7 @@ make gctx1-proof-sft-smoke
 make gctx1-proof-sft-smoke-check
 make gctx1-proof-trainer-job
 make gctx1-proof-trainer-job-check
-uv venv .venv
-uv pip install -e .
-uv pip install torch
+uv sync --locked --python 3.12
 make gctx1-proof-lm-train PYTHON=".venv/bin/python" GITCTX_DATA_DIR="../gitctx-data" GCTX1_PROOF_LM_MAX_RECORDS=32 GCTX1_PROOF_LM_MAX_STEPS=8
 make gctx1-proof-lm-train-check PYTHON=".venv/bin/python" GITCTX_DATA_DIR="../gitctx-data"
 make gctx1-proof-smoke
