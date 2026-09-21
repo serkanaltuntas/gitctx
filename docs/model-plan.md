@@ -158,18 +158,18 @@ make gctx1-proof-sft-smoke
 make gctx1-proof-sft-smoke-check
 make gctx1-proof-trainer-job
 make gctx1-proof-trainer-job-check
-uv venv .venv
-uv pip install -e .
-uv pip install torch
+uv sync --locked --python 3.12
 make gctx1-proof-lm-train PYTHON=".venv/bin/python" GITCTX_DATA_DIR="../gitctx-data" GCTX1_PROOF_LM_MAX_RECORDS=32 GCTX1_PROOF_LM_MAX_STEPS=8
 make gctx1-proof-lm-train-check PYTHON=".venv/bin/python" GITCTX_DATA_DIR="../gitctx-data"
 make gctx1-proof-smoke
 make gctx1-proof-smoke-check
 ```
 
-These targets do not train the 60M-100M proof language model. They validate the
-proof config contract, rerun readiness against the strict artifact, and run the
-current pipeline smoke models on locked `REPORT`. The tokenizer target builds a
+The preparation and smoke targets do not complete a proof-model training run.
+They validate the proof config contract, rerun readiness against the strict
+artifact, and run the current pipeline smoke models on locked `REPORT`. The
+bounded LM command runs the real model on a small DEV sample; full training
+requires removing both limits. The tokenizer target builds a
 dependency-free `regex-diff-v0` vocabulary from reviewed `DEV` records and uses
 locked `REPORT` only for coverage measurement. The proof config check is not
 just JSON parsing: it verifies the GCTX-1 proof band, DEV/REPORT/HELD_OUT split
@@ -203,11 +203,11 @@ job starts.
 The proof LM trainer target is the first real PyTorch decoder-only training
 entrypoint. It reads that trainer job manifest, re-materializes the same DEV
 sequences, trains only on assistant loss tokens, and writes resumable
-checkpoint manifests plus a trainer report. PyTorch remains an optional runtime
-dependency for the public package: environments without it receive an explicit
-backend blocker instead of a silent partial run. Bounded `GCTX1_PROOF_LM_*`
-limits can be used for CPU smoke runs; removing those limits is the expensive
-proof-model training path.
+checkpoint manifests plus a trainer report. PyTorch is pinned in the project
+dependencies and installed by `uv sync --locked`. Source-only environments
+without it receive an explicit backend blocker instead of a silent partial run.
+Bounded `GCTX1_PROOF_LM_*` limits can be used for CPU smoke runs; removing those
+limits is the expensive proof-model training path.
 
 ## Recommended First Public Model
 

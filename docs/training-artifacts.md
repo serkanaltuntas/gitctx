@@ -232,7 +232,7 @@ deterministic cursor-based resume. Use `GCTX1_PROOF_LM_MAX_RECORDS` and
 the expensive proof-model training job and still needs locked `REPORT`
 evaluation before any quality claim.
 
-On training workers with `uv`, prepare the optional PyTorch runtime explicitly:
+On training workers with `uv`, install the pinned project runtime:
 
 ```bash
 uv sync --locked --python 3.12

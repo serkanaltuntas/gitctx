@@ -66,10 +66,12 @@ thin CLI wrapper.
 
 ## Development
 
-Run the current dependency-free test suite:
+Use the locked project environment to run the full suite, including the PyTorch
+training and evaluation tests:
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests
+uv sync --locked
+uv run --locked python -m unittest discover -s tests
 ```
 
 Run the first deterministic fixture evaluation:
