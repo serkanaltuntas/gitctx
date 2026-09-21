@@ -179,6 +179,7 @@ def run_proof_lm_training(
         return report
 
     assert torch is not None
+    _configure_device_runtime(torch, device)
     _seed_torch(torch, job.get("seed", 0))
     model = _build_model(torch, model_contract,
                          attention_chunk_size=attention_chunk_size,
@@ -215,6 +216,7 @@ def run_proof_lm_training(
     while state["record_cursor"] < len(selected_sequences):
         if max_steps is not None and state["optimizer_steps"] >= max_steps:
             break
+        step_started = time.monotonic()
         batch_sequences = selected_sequences[
             state["record_cursor"]:state["record_cursor"] + batch_size
         ]
@@ -239,7 +241,8 @@ def run_proof_lm_training(
         elapsed = time.monotonic() - started
         progress = {"step": state["optimizer_steps"], "record_cursor": state["record_cursor"],
                     "records": len(selected_sequences), "input_length": batch["input_ids"].shape[1],
-                    "loss": float(loss.detach().cpu()), "elapsed_seconds": round(elapsed, 3)}
+                    "loss": float(loss.detach().cpu()), "elapsed_seconds": round(elapsed, 3),
+                    "step_seconds": round(time.monotonic() - step_started, 6)}
         if device == "cuda":
             progress["peak_allocated_bytes"] = torch.cuda.max_memory_allocated()
             progress["peak_reserved_bytes"] = torch.cuda.max_memory_reserved()
@@ -1072,6 +1075,15 @@ def _device_blockers(torch: Any, device: str) -> list[str]:
     return []
 
 
+def _configure_device_runtime(torch: Any, device: str) -> None:
+    if device == "cuda" and torch.cuda.get_device_capability()[0] < 8:
+        # Recent PyTorch eager bmm dispatch can select Triton even on older GPUs.
+        # Keep the numerically equivalent compiled CUDA path on these devices.
+        native = getattr(torch.backends, "python_native", None)
+        if native is not None and hasattr(native, "triton"):
+            native.triton.enabled = False
+
+
 def _runtime_info(torch: Any, device: str, model: Any) -> dict[str, Any]:
     revision = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True)
     return {"python": platform.python_version(), "torch": str(torch.__version__),
@@ -1079,7 +1091,9 @@ def _runtime_info(torch: Any, device: str, model: Any) -> dict[str, Any]:
             "device_name": torch.cuda.get_device_name() if device == "cuda" else device,
             "parameter_count": sum(p.numel() for p in model.parameters()),
             "training_code_revision": revision.stdout.strip() if revision.returncode == 0 else None,
-            "implementation_hashes_are_authoritative": True}
+            "implementation_hashes_are_authoritative": True,
+            "python_native_triton_enabled": getattr(
+                getattr(getattr(torch.backends, "python_native", None), "triton", None), "enabled", None)}
 
 
 def _seed_torch(torch: Any, seed: Any) -> None:

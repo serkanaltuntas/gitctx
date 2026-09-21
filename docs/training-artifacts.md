@@ -253,6 +253,10 @@ make gctx1-proof-lm-train-check PYTHON=".venv/bin/python" GITCTX_DATA_DIR="../gi
 The uv lock selects PyTorch 2.13.0 with CUDA 12.6 on Linux x86_64, and the
 standard PyPI package on other platforms (including macOS/MPS). GPU usability
 must be tested on the worker; the driver-reported CUDA version is not sufficient.
+On CUDA devices below compute capability 8.0, the trainer disables PyTorch's
+Python-native Triton operator overrides and retains compiled CUDA implementations.
+This avoids unsupported eager dispatch on legacy hardware; no local Triton kernel
+compilation or reduced model/context is required.
 The trainer currently uses FP32 for portability to older GPUs. Query-chunked
 attention, block/attention recomputation and projecting only supervised token
 positions reduce memory without shortening context or changing the loss.
@@ -374,3 +378,22 @@ The first GCTX-scale proof artifact card and output-use decision are:
 
 - [`data-cards/gctx1-v0.md`](data-cards/gctx1-v0.md)
 - [`output-use-decisions/gctx1-v0.md`](output-use-decisions/gctx1-v0.md)
+
+## Complete proof worker
+
+For a ready job with a new run ID, `scripts/run-proof-job.sh DATA_DIR RUN_ID cuda`
+runs one full DEV pass, validates the final state, then greedily generates every
+locked REPORT prediction. Existing checkpoints are resumed after compatibility
+checks. Run without diagnostic record or step limits. The worker does not publish
+artifacts or retrain based on REPORT scores.
+
+Evaluation reserves 256 output tokens inside the 8,192-token context. Only
+system/user text determines the prompt; long user inputs use deterministic
+prefix/suffix cropping. Gold contents and gold length never set this budget.
+Predictions are persisted incrementally and can resume with identical checkpoint,
+code and decoding settings. The six contract metrics are reported, along with
+raw token exact-match and unknown scope counts. The frozen regex tokenizer loses
+whitespace, so text reconstruction is heuristic and exact textual equality has
+that limitation. Scope/specificity checks are proxies, not semantic correctness
+judgments. Record results and limitations in private model/eval cards before
+considering a public claim.

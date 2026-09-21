@@ -16,7 +16,7 @@ from typing import Any
 
 from gitctx.conventional import CommitContext, parse_commit_message, score_commit_message
 from gitctx.proof_lm_train import (
-    _atomic_json, _build_model, _data_path, _iter_jsonl, _job_blockers, _load_json,
+    _atomic_json, _build_model, _configure_device_runtime, _data_path, _iter_jsonl, _job_blockers, _load_json,
     _load_torch, _resume_config_sha256, _sha256, _stable_sha256,
     proof_lm_final_checkpoint_path, validate_proof_lm_training,
 )
@@ -89,6 +89,7 @@ def evaluate(data_dir: Path, run_id: str, *, device: str = "cuda",
     torch = _load_torch()
     if torch is None:
         raise ValueError("torch is not installed")
+    _configure_device_runtime(torch, device)
     state = torch.load(_data_path(data_dir, Path(checkpoint["state_path"])), map_location="cpu", weights_only=True)
     config = state["config"]
     if _resume_config_sha256(config) != checkpoint["config_sha256"]:
