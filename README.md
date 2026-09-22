@@ -160,6 +160,7 @@ See:
 - [docs/teacher-audit-plan.md](docs/teacher-audit-plan.md)
 - [docs/teacher-decisions/ollama-qwen2.5-coder-7b-smoke.md](docs/teacher-decisions/ollama-qwen2.5-coder-7b-smoke.md)
 - [docs/evaluation.md](docs/evaluation.md)
+- [docs/memorization-diagnostic.md](docs/memorization-diagnostic.md)
 - [docs/split-contract.md](docs/split-contract.md)
 - [docs/open-source-standard.md](docs/open-source-standard.md)
 - [docs/release-checklist.md](docs/release-checklist.md)
