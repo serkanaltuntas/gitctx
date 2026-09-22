@@ -27,10 +27,11 @@ before training and every ten epochs, up to 100 epochs. It uses greedy decoding
 with a fixed 128-token budget and checks that inference prompts equal training
 prefixes. Success requires all 16 target token sequences, parsed types, and
 token-normalized scopes to match, with assistant/terminal-token cross-entropy
-at most 0.1. Raw scope equality is also reported: the unchanged decoder inserts
-spaces in dotted or slash-separated scopes, even for perfect target tokens.
-Token-normalized matching isolates this formatting defect from learning and
-does not count as raw scope correctness or a decoder fix.
+at most 0.1. Raw scope equality is also reported. The legacy decoder inserted
+spaces in dotted or slash-separated scopes, even for perfect target tokens;
+the current [scope policy](order-ablation.md#decoder-policy) repairs these cases.
+Token-normalized matching remains separate from raw equality. Replay historical
+results with their frozen source revision; do not rewrite the original metrics.
 
 Outputs are separate per-checkpoint evaluations, a summary report, and a local
 checkpoint containing weights, optimizer state, and RNG state. Add `--resume`

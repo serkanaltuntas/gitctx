@@ -64,9 +64,9 @@ class ProofMemorizationTests(unittest.TestCase):
                 load_examples(root, modified)
 
     @unittest.skipIf(_load_torch() is None, "torch missing")
-    def test_perfect_tokens_do_not_hide_lossy_scope_formatting(self):
+    def test_perfect_tokens_do_not_hide_lossy_body_formatting(self):
         torch = _load_torch()
-        target = "fix(src/api.py): handle invalid input"
+        target = "fix(src/api.py): handle invalid input\n\nHandle `input` safely."
         tokens = tokenize_text(target)
         vocab = {t:i for i,t in enumerate(dict.fromkeys(["<bos>", "<sep>", "<eos>", *tokens]))}
         ids = [vocab[t] for t in tokens]
@@ -88,9 +88,10 @@ class ProofMemorizationTests(unittest.TestCase):
         self.assertTrue(summary["passed"])
         self.assertEqual(summary["exact_tokens"], 1)
         self.assertEqual(summary["scope_tokens_match"], 1)
-        self.assertEqual(summary["scope_match"], 0)
+        self.assertEqual(summary["scope_match"], 1)
         self.assertEqual(summary["exact_text"], 0)
-        self.assertIn("src / api. py", predictions[0]["message"])
+        self.assertIn("src/api.py", predictions[0]["message"])
+        self.assertIn("` input `", predictions[0]["message"])
 
     @unittest.skipIf(_load_torch() is None, "torch missing")
     def test_training_resume_matches_uninterrupted_and_protects_protocol(self):

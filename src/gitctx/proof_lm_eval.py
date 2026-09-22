@@ -46,7 +46,10 @@ def prompt_tokens(record: dict[str, Any], *, context_tokens: int, max_new_tokens
     return result
 
 
-def decode_tokens(tokens: list[str]) -> str:
+DECODER_POLICY = "scope-punctuation-v1"
+
+
+def decode_tokens_legacy(tokens: list[str]) -> str:
     """Deterministic whitespace reconstruction for the frozen lossy regex tokenizer."""
     text = " ".join("\n" if token == "<nl>" else token for token in tokens)
     text = re.sub(r" *\n *", "\n", text)
@@ -55,6 +58,22 @@ def decode_tokens(tokens: list[str]) -> str:
     # A tokenized Conventional Commit scope is adjacent to its type.
     text = re.sub(r"^([a-z][a-z0-9-]*) \(", r"\1(", text)
     return text.strip()
+
+
+def decode_tokens(tokens: list[str]) -> str:
+    """Reconstruct compact path/package punctuation in the header scope only.
+
+    The frozen regex tokenizer cannot recover arbitrary original whitespace.
+    Preserve word boundaries in multiword scopes and leave subject/body output
+    identical to the legacy decoder. This policy does not infer scope from gold
+    references, repository names or file paths in the prompt.
+    """
+    text = decode_tokens_legacy(tokens)
+    match = re.match(r"^([a-z][a-z0-9-]*\()([^()\r\n]+)(\)(?:!)?: )", text)
+    if match is None:
+        return text
+    scope = re.sub(r"\s*([./\\:@-])\s*", r"\1", match.group(2))
+    return match.group(1) + scope + match.group(3) + text[match.end():]
 
 
 def generate(torch: Any, model: Any, ids: list[int], *, device: str,
@@ -116,6 +135,7 @@ def evaluate(data_dir: Path, run_id: str, *, device: str = "cuda",
     if len(records) != job["data_contract"]["report_eval_records"]:
         raise ValueError("locked REPORT coverage mismatch")
     identity = {"run_id": run_id, "checkpoint_sha256": checkpoint["state_sha256"],
+                "decoder_policy": DECODER_POLICY,
                 "tokenizer_sha256": _sha256(data_dir / job["inputs"]["tokenizer"]["path"]),
                 "evaluation_code_sha256": _sha256(Path(__file__)),
                 "max_new_tokens": max_new_tokens, "decode": "greedy",
