@@ -25,8 +25,12 @@ Training starts fresh with seed 17, FP32, batch one, and AdamW at 0.0003. Each
 epoch shuffles the selected examples deterministically. Evaluation occurs
 before training and every ten epochs, up to 100 epochs. It uses greedy decoding
 with a fixed 128-token budget and checks that inference prompts equal training
-prefixes. Success requires all 16 target token sequences and parsed type/scope
-pairs to match, with assistant/terminal-token cross-entropy at most 0.1.
+prefixes. Success requires all 16 target token sequences, parsed types, and
+token-normalized scopes to match, with assistant/terminal-token cross-entropy
+at most 0.1. Raw scope equality is also reported: the unchanged decoder inserts
+spaces in dotted or slash-separated scopes, even for perfect target tokens.
+Token-normalized matching isolates this formatting defect from learning and
+does not count as raw scope correctness or a decoder fix.
 
 Outputs are separate per-checkpoint evaluations, a summary report, and a local
 checkpoint containing weights, optimizer state, and RNG state. Add `--resume`

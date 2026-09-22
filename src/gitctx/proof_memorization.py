@@ -106,7 +106,8 @@ def prepare(data_dir: Path, job_path: Path, run_id: str):
         "evaluation": {"split": "same selected DEV examples", "decode": "greedy",
                        "max_new_tokens": 128, "prompt": "same system/user-only production helper",
                        "teacher_forced_tokens": "assistant plus terminal tokens only",
-                       "pass": "all selected target token sequences and parsed type/scope match; CE <= 0.1",
+                       "pass": "all target token sequences, parsed types and token-normalized scopes match; CE <= 0.1",
+                       "scope_policy": "report raw equality separately; tokenize parsed scopes to isolate lossy whitespace reconstruction",
                        "stop": "first passing evaluation or 100 epochs, whichever is earlier"},
         "limitations": ["Intentionally easy, short, untruncated seen examples with known target tokens.",
                         "The full context limit is preserved; this is not a long-input quality test.",
@@ -191,20 +192,23 @@ def evaluate_examples(torch, model, examples, vocabulary, *, device, max_new_tok
         try:
             parsed = parse_commit_message(message)
             type_match, scope_match = parsed.type == expected.type, parsed.scope == expected.scope
+            scope_tokens_match = (parsed.scope == expected.scope if None in (parsed.scope, expected.scope)
+                                  else tokenize_text(parsed.scope) == tokenize_text(expected.scope))
         except ValueError:
-            type_match = scope_match = False
+            type_match = scope_match = scope_tokens_match = False
         predictions.append({"record_id": example["record"]["id"], "data_split": "DEV",
             "message": message, "target_message": example["target"], "output_token_ids": output,
             "target_token_ids": example["target_ids"], "stop_reason": reason,
             "prompt_sha256": _stable_sha256(example["prompt_ids"]),
             "exact_tokens": output == example["target_ids"] and reason == "stop_token",
-            "exact_text": message == example["target"], "type_match": type_match, "scope_match": scope_match})
+            "exact_text": message == example["target"], "type_match": type_match, "scope_match": scope_match,
+            "scope_tokens_match": scope_tokens_match})
     counts = {key: sum(p[key] for p in predictions)
-              for key in ("exact_tokens", "exact_text", "type_match", "scope_match")}
+              for key in ("exact_tokens", "exact_text", "type_match", "scope_match", "scope_tokens_match")}
     summary = {"records": len(examples), "mean_loss": loss_sum / token_count,
                "supervised_tokens": token_count, "teacher_forced_correct_tokens": correct,
                "teacher_forced_accuracy": correct / token_count, **counts}
-    summary["passed"] = (all(counts[k] == len(examples) for k in ("exact_tokens", "type_match", "scope_match"))
+    summary["passed"] = (all(counts[k] == len(examples) for k in ("exact_tokens", "type_match", "scope_tokens_match"))
                          and summary["mean_loss"] <= 0.1)
     return summary, predictions
 
