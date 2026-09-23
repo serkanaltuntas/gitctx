@@ -162,6 +162,7 @@ See:
 - [docs/evaluation.md](docs/evaluation.md)
 - [docs/memorization-diagnostic.md](docs/memorization-diagnostic.md)
 - [docs/order-ablation.md](docs/order-ablation.md)
+- [docs/input-diagnostic.md](docs/input-diagnostic.md)
 - [docs/split-contract.md](docs/split-contract.md)
 - [docs/open-source-standard.md](docs/open-source-standard.md)
 - [docs/release-checklist.md](docs/release-checklist.md)
