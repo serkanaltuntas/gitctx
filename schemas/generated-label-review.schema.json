@@ -23,6 +23,9 @@
     "review_protocol"
   ],
   "properties": {
+    "reviewer_kind": {"enum": ["human", "automation", "assistant", "unknown"]},
+    "review_method": {"type": "string"},
+    "review_evidence": {"type": "string"},
     "id": {"type": "string", "minLength": 1},
     "generated_label_id": {"type": "string", "minLength": 1},
     "source_repo_url": {"type": "string", "minLength": 1},
