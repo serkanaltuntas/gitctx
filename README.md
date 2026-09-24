@@ -31,8 +31,8 @@ model behavior is measurable.
 ## Principles
 
 - Local-first by default.
-- No automatic commits or pushes.
-- No network calls unless the user explicitly opts in.
+- The product CLI does not automatically commit or push.
+- The product CLI makes no network calls unless the user explicitly opts in.
 - No training on closed-model outputs.
 - Distillation only from models whose licenses allow generated outputs to train
   downstream models.
@@ -65,6 +65,9 @@ thin CLI wrapper.
 7. Package the CLI around a useful local model.
 
 ## Development
+
+Development agents must follow [AGENTS.md](AGENTS.md), including repository
+boundaries and signed commit/push synchronization after completed work.
 
 Use the locked project environment to run the full suite, including the PyTorch
 training and evaluation tests:
