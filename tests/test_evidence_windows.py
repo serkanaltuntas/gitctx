@@ -98,3 +98,57 @@ class ReferenceReviewTests(unittest.TestCase):
         self.assertEqual(result['status'],'needs_review')
         self.assertIn('runtime tokenizer/prompt count mismatch',result['validation_errors'])
         self.assertFalse(result['automatic_training_promotion'])
+
+class ReviewBatchTests(unittest.TestCase):
+    def test_resume_preserves_failures_and_rejects_changed_inputs(self):
+        import json
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from gitctx.review_batch import run
+        with TemporaryDirectory() as tmp:
+            p=Path(tmp);source=p/'source.jsonl';selection=p/'ids.json';tokenizer=p/'tokenizer.json';license=p/'LICENSE'
+            r=record();r['data_split']='DEV'
+            source.write_text(json.dumps(r)+'\n');selection.write_text(json.dumps([r['id']]))
+            tokenizer.write_text('{}');license.write_text('Apache License\nVersion 2.0')
+            result={'record_id':r['id'],'source_range':[0,len(r['diff'])],
+                    'model_digest':'abc','status':'needs_review'}
+            args=(source,selection,tokenizer,p/'output','test',license,'revision')
+            with patch('gitctx.review_batch.request_json',return_value={'models':[{'name':'test','digest':'abc'}]}), \
+                 patch('gitctx.review_batch.Tokenizer'), \
+                 patch('gitctx.review_batch.split_for_review',return_value=[(0,len(r['diff']))]), \
+                 patch('gitctx.review_batch.review_one',return_value=result) as review:
+                run(*args);run(*args)
+                self.assertEqual(review.call_count,1)
+                completion=json.loads((p/'output/review-completion.json').read_text())
+                self.assertEqual(completion['unresolved_parts'],1)
+                self.assertEqual(completion['labels_promoted'],0)
+                source.write_text(json.dumps({**r,'target_message':'changed'})+'\n')
+                with self.assertRaisesRegex(ValueError,'resume protocol changed'):run(*args)
+
+class CandidateTargetTests(unittest.TestCase):
+    def test_teacher_prompt_has_no_original_target_or_screen_notes(self):
+        from gitctx.window_targets import render
+        r=record();w={'kind':'full','window_id':'example:w0000'}
+        a=render(r,w)
+        r.update(target_message='TARGET_SECRET',historical_subject='HISTORY_SECRET',review_notes='REVIEW_SECRET')
+        self.assertEqual(a,render(r,w))
+        self.assertNotIn('TARGET_SECRET',a)
+
+    def test_candidate_is_never_an_approved_training_label(self):
+        from gitctx.window_targets import generate
+        class Encoding:ids=[0]*100
+        class Teacher:
+            def encode(self,p):return Encoding()
+        class Student:
+            def encode(self,p):return [0]*10
+        response={'response':'{"message":"fix(a): use new value"}','prompt_eval_count':100,'done_reason':'stop'}
+        tags={'models':[{'name':'test','digest':'abc'}]}
+        with patch('gitctx.window_targets.request_json',side_effect=[tags,response]):
+            result=generate(record(),{'kind':'full','window_id':'example:w0000'},
+                            tokenizer=Teacher(),student_tokenizer=Student(),model='test',model_digest='abc',
+                            model_license='Apache-2.0')
+        self.assertEqual(result['status'],'candidate_requires_verification')
+        self.assertEqual(result['training_use'],'prohibited_until_verified')
+        self.assertFalse(result['independent_human_review'])
+        with self.assertRaises(ValueError):
+            generate(record(),{},tokenizer=Teacher(),student_tokenizer=Student(),model='test',model_digest='abc',model_license='unknown')
