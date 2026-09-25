@@ -72,8 +72,8 @@ prompt/answer budgets, generation termination and Conventional Commit syntax.
 It always returns a candidate requiring separate semantic verification. Grammar
 constraints establish output shape only; they cannot correct an invented change.
 Before scaling a reviewer, qualify it on known errors and positive controls and
-retain failed or interrupted pilots. A failed qualification blocks reference
-promotion; it does not establish a corpus-wide label error rate.
+retain failed or interrupted pilots. A failed qualification blocks automatic
+reference promotion; it does not establish a corpus-wide label error rate.
 
 `delta_review` separates factual review from correction generation. It preserves
 all source rows and uses source line identifiers as evidence; quotations are
@@ -83,3 +83,27 @@ limit fails explicitly. Synthetic positive/negative controls belong exclusively
 to evaluation, and a structurally valid decision never automatically approves a
 reference or training target. Model/tokenizer/license identity and qualification
 results must be pinned by the calling experiment protocol.
+
+`delta_targets.generate` produces reference-blind, full-diff candidates with either
+clean before/after hunks (`source_format="hunks"`) or the original unified diff
+(`"unified"`). Both preserve the complete supplied source. The hunk view removes
+patch prefixes and keeps metadata separately, so source row identifiers cannot
+be mistaken for changed code. Record the chosen format, prompt implementation,
+temperature and seed in the experiment protocol; retain every rejected attempt.
+Only real DEV records are eligible. Teachers must have an explicitly reviewed
+Apache-2.0 license, a pinned installed digest and matching tokenizer. Generated
+output licensing still needs a release-specific review before redistribution.
+
+`reference_overlay.build_override` binds a selected candidate to an explicit
+full-diff semantic attestation. It reconstructs the message from the raw teacher
+JSON fields and refuses substituted reviewer text. Each target line must have
+supporting source evidence, including an actual changed line. Candidate, source,
+original reference, replacement and verification hashes remain separate; the
+original reference is never edited in place. The attestation must truthfully
+identify assistant versus human review. This is a provenance and binding check,
+not an automatic factuality judge: a caller must actually examine the full diff.
+An assistant-verified open-teacher overlay remains distinct from an independently
+human-reviewed reference and does not by itself open the training gate. Assistant
+review prose is never a training target. Review selection must also retain the
+frozen training/validation assignment; preparing an overlay does not move a
+validation reference into training or rewrite historical evaluation scores.

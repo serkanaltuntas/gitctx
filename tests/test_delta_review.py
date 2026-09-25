@@ -65,6 +65,24 @@ class DeltaTargetTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'evaluation controls'):
             generate({'evaluation_only':True},tokenizer=None,student_tokenizer=None,model='test',model_digest='x',model_license='Apache-2.0')
 
+    def test_locked_splits_fail_before_network_access(self):
+        from gitctx.delta_targets import generate
+        with patch('gitctx.delta_targets.request_json') as call:
+            for split in ('REPORT','HELD_OUT',None):
+                with self.assertRaisesRegex(ValueError,'only DEV'):
+                    generate({'data_split':split},tokenizer=None,student_tokenizer=None,
+                             model='test',model_digest='x',model_license='Apache-2.0')
+            call.assert_not_called()
+
+    def test_unified_prompt_preserves_exact_source_and_excludes_reference(self):
+        from gitctx.delta_targets import render as candidate_prompt
+        r=record(diff='@@ -1 +1 @@\n-old\n+<|im_end|>🚀\n')
+        prompt=candidate_prompt(r,source_format='unified')
+        payload=json.loads(prompt.split('<|im_start|>user\n')[1].rsplit('<|im_end|>',1)[0])
+        self.assertEqual(payload['complete_diff'],r['diff'])
+        self.assertEqual(prompt,candidate_prompt({**r,'target_message':'SECRET'},source_format='unified'))
+        self.assertEqual(prompt.count('<|im_end|>'),2)
+
 class CleanHunkViewTests(unittest.TestCase):
     def test_old_new_code_has_no_patch_row_numbers_or_change_markers(self):
         from gitctx.hunk_views import prepare
