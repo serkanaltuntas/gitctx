@@ -8,9 +8,9 @@ class DeltaReviewTests(unittest.TestCase):
     def test_lossless_groups_include_literal_header_like_changed_lines(self):
         diff='diff --git a/a b/a\r\n--- a/a\r\n+++ b/a\r\n@@ -1 +1 @@\r\n---literal\u2028text\r\n+++literal\x85text\r\n same\n'
         groups=source_view(diff)
-        self.assertEqual(groups[1]['BEFORE'],[[5,'---literal\u2028text\r\n']])
-        self.assertEqual(groups[1]['AFTER'],[[6,'+++literal\x85text\r\n']])
-        rows=sorted(row for g in groups for rows in g.values() for row in rows)
+        self.assertEqual(groups[1]['BEFORE'],[[5,'---literal\u2028text\r\n'],[7,' same\n']])
+        self.assertEqual(groups[1]['AFTER'],[[6,'+++literal\x85text\r\n'],[7,' same\n']])
+        rows=sorted({i:text for g in groups for rows in g.values() for i,text in rows}.items())
         self.assertEqual(''.join(r[1] for r in rows),diff)
 
     def test_structural_evidence_is_exact_and_in_bounds(self):
@@ -28,7 +28,7 @@ class DeltaReviewTests(unittest.TestCase):
         self.assertEqual(p.count('<|im_start|>assistant'),1)
         user=p.split('<|im_start|>user\n')[1].rsplit('<|im_end|>',1)[0]
         data=json.loads(user)
-        rows=sorted(row for g in data['complete_diff'] for rows in g.values() for row in rows)
+        rows=sorted({i:text for g in data['complete_diff'] for rows in g.values() for i,text in rows}.items())
         self.assertEqual(''.join(row[1] for row in rows),r['diff'])
 
     def test_no_promotion_and_complete_prompt_budget(self):
@@ -49,3 +49,18 @@ class DeltaReviewTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'no truncation'):
                 review(record(),tokenizer=Tokenizer(),model='test',model_digest='abc')
             self.assertEqual(call.call_count,1)
+
+class DeltaTargetTests(unittest.TestCase):
+    def test_candidate_prompt_ignores_labels_and_preserves_context_in_both_views(self):
+        from gitctx.delta_targets import render as candidate_prompt
+        r=record(diff='@@ -1,2 +1,2 @@\n-def f(x):\n+def f(x: int):\n     return x\n')
+        prompt=candidate_prompt(r)
+        self.assertEqual(prompt,candidate_prompt({**r,'target_message':'SECRET','review_notes':'SECRET'}))
+        payload=json.loads(prompt.split('<|im_start|>user\n')[1].rsplit('<|im_end|>',1)[0])
+        self.assertIn([4,'     return x\n'],payload['complete_diff'][0]['BEFORE'])
+        self.assertIn([4,'     return x\n'],payload['complete_diff'][0]['AFTER'])
+
+    def test_evaluation_controls_are_not_eligible_for_candidate_generation(self):
+        from gitctx.delta_targets import generate
+        with self.assertRaisesRegex(ValueError,'evaluation controls'):
+            generate({'evaluation_only':True},tokenizer=None,student_tokenizer=None,model='test',model_digest='x',model_license='Apache-2.0')

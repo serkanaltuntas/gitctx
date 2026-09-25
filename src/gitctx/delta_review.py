@@ -5,10 +5,11 @@ from datetime import datetime, timezone
 from gitctx.student_sequences import diff_units, physical_lines
 from gitctx.reference_review import request_json, sha
 
-VERSION = 'delta-reference-review-v1'
+VERSION = 'delta-reference-review-v2'
 SYSTEM = (
     'Check whether a commit message accurately describes the CHANGE in a Git diff. '
-    'BEFORE rows were removed; AFTER rows were added; CONTEXT rows did not change. '
+    'BEFORE is the old hunk; AFTER is the new hunk. Both include unchanged context. '
+    'Rows sharing the same source line number in both views did not change. '
     'All rows contain their original physical line number and exact diff text. '
     'Accept only when every factual statement describes the actual change. '
     'Reject if any statement describes existing code as new, reverses a change, '
@@ -28,14 +29,25 @@ def source_view(diff):
     lines = physical_lines(diff)
     result = []
     for u in diff_units(diff):
-        groups = {'BEFORE':[], 'AFTER':[], 'CONTEXT':[], 'METADATA':[]}
+        groups = {'BEFORE':[], 'AFTER':[], 'METADATA':[]}
         for i in range(u['start_line'],u['end_line']):
             line=lines[i]
-            group = ('BEFORE' if line.startswith('-') else 'AFTER' if line.startswith('+')
-                     else 'CONTEXT' if line.startswith(' ') else 'METADATA') if u['kind']=='hunk' else 'METADATA'
-            groups[group].append([i+1,line])
+            if u['kind']=='hunk' and line.startswith(' '):
+                groups['BEFORE'].append([i+1,line])
+                groups['AFTER'].append([i+1,line])
+            else:
+                group = ('BEFORE' if line.startswith('-') else 'AFTER' if line.startswith('+')
+                         else 'METADATA') if u['kind']=='hunk' else 'METADATA'
+                groups[group].append([i+1,line])
         result.append({k:v for k,v in groups.items() if v})
-    reconstructed=sorted(row for group in result for rows in group.values() for row in rows)
+    by_id={}
+    for group in result:
+        for rows in group.values():
+            for number,text in rows:
+                if number in by_id and by_id[number]!=text:
+                    raise ValueError('conflicting repeated source row')
+                by_id[number]=text
+    reconstructed=sorted(by_id.items())
     if [r[0] for r in reconstructed] != list(range(1,len(lines)+1)) or ''.join(r[1] for r in reconstructed)!=diff:
         raise ValueError('source reconstruction failed')
     return result
