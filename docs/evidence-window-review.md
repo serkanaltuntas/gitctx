@@ -74,3 +74,12 @@ constraints establish output shape only; they cannot correct an invented change.
 Before scaling a reviewer, qualify it on known errors and positive controls and
 retain failed or interrupted pilots. A failed qualification blocks reference
 promotion; it does not establish a corpus-wide label error rate.
+
+`delta_review` separates factual review from correction generation. It preserves
+all source rows and uses source line identifiers as evidence; quotations are
+looked up from the source, never copied from model text. Complete inputs choose
+an adequate reviewer context without truncation. An input exceeding the reviewed
+limit fails explicitly. Synthetic positive/negative controls belong exclusively
+to evaluation, and a structurally valid decision never automatically approves a
+reference or training target. Model/tokenizer/license identity and qualification
+results must be pinned by the calling experiment protocol.
