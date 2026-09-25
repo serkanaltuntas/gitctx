@@ -64,3 +64,13 @@ candidates until verified; assistant prose and screening notes are never trainin
 labels. No review result automatically promotes a label or opens the training
 gate. Source and generated-output redistribution still require a release-specific
 license review; local operational artifacts are not a public dataset release.
+
+`window_targets.generate` can propose a concise window target using a separately
+reviewed Apache-2.0 teacher. Its prompt does not include the original reference,
+historical subject, or screening notes. It checks the installed model digest,
+prompt/answer budgets, generation termination and Conventional Commit syntax.
+It always returns a candidate requiring separate semantic verification. Grammar
+constraints establish output shape only; they cannot correct an invented change.
+Before scaling a reviewer, qualify it on known errors and positive controls and
+retain failed or interrupted pilots. A failed qualification blocks reference
+promotion; it does not establish a corpus-wide label error rate.
