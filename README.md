@@ -177,3 +177,6 @@ Code and documentation in this repository are licensed under the Apache License
 2.0 unless a file states otherwise. Model artifacts, generated labels, and
 datasets will carry release-specific licenses and cards after upstream license
 review.
+
+Lossless window preparation and local model review are documented in the
+[evidence window runbook](docs/evidence-window-review.md).
