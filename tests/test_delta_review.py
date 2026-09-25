@@ -57,10 +57,26 @@ class DeltaTargetTests(unittest.TestCase):
         prompt=candidate_prompt(r)
         self.assertEqual(prompt,candidate_prompt({**r,'target_message':'SECRET','review_notes':'SECRET'}))
         payload=json.loads(prompt.split('<|im_start|>user\n')[1].rsplit('<|im_end|>',1)[0])
-        self.assertIn([4,'     return x\n'],payload['complete_diff'][0]['BEFORE'])
-        self.assertIn([4,'     return x\n'],payload['complete_diff'][0]['AFTER'])
+        self.assertIn('    return x\n',payload['complete_diff'][0]['before'])
+        self.assertIn('    return x\n',payload['complete_diff'][0]['after'])
 
     def test_evaluation_controls_are_not_eligible_for_candidate_generation(self):
         from gitctx.delta_targets import generate
         with self.assertRaisesRegex(ValueError,'evaluation controls'):
             generate({'evaluation_only':True},tokenizer=None,student_tokenizer=None,model='test',model_digest='x',model_license='Apache-2.0')
+
+class CleanHunkViewTests(unittest.TestCase):
+    def test_old_new_code_has_no_patch_row_numbers_or_change_markers(self):
+        from gitctx.hunk_views import prepare
+        diff='diff --git a/a b/a\r\n--- a/a\r\n+++ b/a\r\n@@ -1 +1 @@\r\n-# teh\r\n+# the\r\n same\n'
+        views=prepare(diff)
+        self.assertEqual(views[1]['before'],'# teh\r\nsame\n')
+        self.assertEqual(views[1]['after'],'# the\r\nsame\n')
+        self.assertEqual(views[0]['metadata'],'diff --git a/a b/a\r\n--- a/a\r\n+++ b/a\r\n')
+    def test_literal_signs_unicode_and_missing_newline_marker_are_preserved(self):
+        from gitctx.hunk_views import prepare
+        diff='@@ -1 +1 @@\n---İ\u2028\n+++🚀\n\\ No newline at end of file\n'
+        v=prepare(diff)[0]
+        self.assertEqual(v['before'],'--İ\u2028\n')
+        self.assertEqual(v['after'],'++🚀\n')
+        self.assertIn('No newline',v['hunk_header'])
