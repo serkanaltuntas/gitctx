@@ -29,3 +29,17 @@ a full epoch/checkpoint/resume runner, audit input file provenance, authorize a
 training run or establish semantic quality. The caller must pin source files,
 review artifacts, the independent split/selection and tokenizer; the full readiness
 audit and a separately selected budget remain required before real training.
+
+`reviewed_training.run_epochs()` supplies a bounded 1/2/4-epoch loop: one update
+per complete commit, seeded shuffling, gradient clipping and exact joint validation
+likelihood. Checkpoints bind dataset and run identity, optimizer settings, parameter
+shapes, RNG state and an exact epoch cursor. State files are immutable and hashed;
+`latest.json` is replaced atomically. Resume refuses changed input identities or
+checkpoint bytes. A bounded invocation may stop mid-epoch and continue with the
+same order and optimizer state. This API requires an explicit execution flag;
+that flag is not a substitute for actual user authorization of a real run.
+
+The data-file manifest loader, corpus readiness audit, generation-quality metrics
+and measured resource proposal must still surround this runner before real use.
+Tests exercise only small synthetic fixtures, including bit-exact interrupted vs
+uninterrupted parameters, optimizer moments and validation metrics.
