@@ -118,3 +118,17 @@ human-reviewed reference and does not by itself open the training gate. Assistan
 review prose is never a training target. Review selection must also retain the
 frozen training/validation assignment; preparing an overlay does not move a
 validation reference into training or rewrite historical evaluation scores.
+
+`reviewed_references.resolve_reference` selects a retained original or reviewed
+open-teacher overlay using an audited index row and its hash-bound artifact.
+The caller supplies the frozen partition independently; mismatched source,
+original target, artifact, teacher provenance or partition fails. The selected
+target carries explicit assistant/human provenance without mutating the source
+record or granting run approval. Callers must still audit and pin the complete
+index and artifact collection; a matching hash is not semantic verification.
+
+`materialize_reviewed_full` feeds that selection through the common student
+prompt, fixed answer reserve and assistant-only loss mask. It explicitly rejects
+long inputs; it never copies a whole-commit target onto partial windows. A
+separate window alignment or verified aggregation path remains required before
+those inputs can be consumed by a trainer.
