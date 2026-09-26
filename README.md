@@ -68,6 +68,7 @@ thin CLI wrapper.
 
 Development agents must follow [AGENTS.md](AGENTS.md), including repository
 boundaries and signed commit/push synchronization after completed work.
+Routine development takes place directly on `main`.
 
 Use the locked project environment to run the full suite, including the PyTorch
 training and evaluation tests:

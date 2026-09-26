@@ -28,9 +28,12 @@ file as public by default.
 - Standing maintainer instruction, 2026-09-24: after each meaningful completed
   unit of authorized work, review and validate its changes, create a GPG-signed
   commit and push it to the corresponding branch on `origin`. Routine pushes
-  do not need another confirmation. Use the current task branch; for a new
-  branch, push with upstream tracking. Do not automatically merge into `main`,
-  tag a release or publish model/data artifacts.
+  do not need another confirmation. Do not automatically tag a release or
+  publish model/data artifacts.
+- Maintainer branch policy, 2026-09-26: work directly on `main` by default.
+  Do not create a feature branch for routine work. Use a separate branch only
+  when explicitly requested or when a concrete isolation need justifies it;
+  establish its upstream and do not merge it automatically without authorization.
 - Fetch before committing/pushing and check the remote branch. Fast-forward a
   clean checkout when appropriate; preserve local and concurrent work when
   resolving divergence. Never force-push, rewrite shared history or overwrite
