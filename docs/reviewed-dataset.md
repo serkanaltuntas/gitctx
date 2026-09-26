@@ -39,7 +39,15 @@ checkpoint bytes. A bounded invocation may stop mid-epoch and continue with the
 same order and optimizer state. This API requires an explicit execution flag;
 that flag is not a substitute for actual user authorization of a real run.
 
-The data-file manifest loader, corpus readiness audit, generation-quality metrics
+The corpus readiness audit, generation-quality metrics
 and measured resource proposal must still surround this runner before real use.
 Tests exercise only small synthetic fixtures, including bit-exact interrupted vs
 uninterrupted parameters, optimizer moments and validation metrics.
+
+`reviewed_inputs.load_dataset()` verifies every file hash in a pinned input
+manifest and reconstructs the dataset. It binds tokenizer and coverage to the
+student preparation, independently checks tokenizer-fit train IDs and the frozen
+validation protocol, and requires the complete original review selection. Every
+referenced review artifact must be pinned. It rejects paths outside the data root,
+unresolved labels, missing resources and changed partitions before training.
+The surrounding run protocol must pin the input manifest itself.
