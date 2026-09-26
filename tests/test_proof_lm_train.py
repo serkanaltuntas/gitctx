@@ -62,6 +62,99 @@ class ProofLmTrainTests(unittest.TestCase):
             self.assertTrue((root / proof_lm_latest_checkpoint_path("test-proof-run")).exists())
             self.assertTrue((root / proof_lm_final_checkpoint_path("test-proof-run")).exists())
 
+    @unittest.skipIf(_load_torch() is None, "torch is not installed")
+    def test_resume_extends_limits_and_matches_uninterrupted_weights(self) -> None:
+        torch = _load_torch()
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            uninterrupted, resumed = Path(a), Path(b)
+            for root in (uninterrupted, resumed):
+                _prepare_trainer_job(root, run_id="resume-test")
+            run_proof_lm_training(uninterrupted, run_id="resume-test", write=True)
+            run_proof_lm_training(resumed, run_id="resume-test", max_steps=1,
+                                  max_records=1, write=True)
+            report = run_proof_lm_training(resumed, run_id="resume-test", max_steps=2,
+                                           resume=True, write=True)
+            self.assertEqual(report["training"]["processed_this_run"], 1)
+            self.assertEqual(report["status"], "trained")
+            states = []
+            for root in (uninterrupted, resumed):
+                cp = json.loads((root / proof_lm_latest_checkpoint_path("resume-test")).read_text())
+                states.append(torch.load(root / cp["state_path"], weights_only=True))
+            for name, value in states[0]["model_state"].items():
+                torch.testing.assert_close(value, states[1]["model_state"][name], rtol=0, atol=0)
+            self.assertEqual(states[0]["trainer_state"], states[1]["trainer_state"])
+            with self.assertRaisesRegex(ValueError, "config mismatch"):
+                run_proof_lm_training(resumed, run_id="resume-test", learning_rate=0.01,
+                                      resume=True)
+            # A changed seed or changed input lineage must never be accepted.
+            job_path = resumed / proof_trainer_job_path("resume-test")
+            job = json.loads(job_path.read_text())
+            job["seed"] += 1
+            job_path.write_text(json.dumps(job))
+            with self.assertRaisesRegex(ValueError, "config mismatch"):
+                run_proof_lm_training(resumed, run_id="resume-test", resume=True)
+
+    @unittest.skipIf(_load_torch() is None, "torch is not installed")
+    def test_rope_relative_positions_and_causal_model(self) -> None:
+        from gitctx.proof_lm_train import _apply_rope, _build_model
+        torch = _load_torch()
+        q, k = torch.randn(1, 6, 2, 8), torch.randn(1, 6, 2, 8)
+        positions = torch.arange(6)
+        def scores(offset):
+            qr = _apply_rope(torch, q, positions + offset).transpose(1, 2)
+            kr = _apply_rope(torch, k, positions + offset).transpose(1, 2)
+            return qr @ kr.transpose(-2, -1)
+        torch.testing.assert_close(scores(0), scores(9), atol=1e-5, rtol=1e-5)
+        torch.testing.assert_close(_apply_rope(torch, q, positions)[:, 0], q[:, 0])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _prepare_trainer_job(root, run_id="rope-test")
+            contract = json.loads((root / proof_trainer_job_path("rope-test")).read_text())["model_contract"]
+            model = _build_model(torch, contract).eval()
+            self.assertFalse(any("position_embedding" in key for key in model.state_dict()))
+            ids = torch.randint(0, contract["tokenizer_vocab_size"], (1, 6))
+            changed = ids.clone()
+            changed[:, 4:] = (changed[:, 4:] + 1) % contract["tokenizer_vocab_size"]
+            mask = torch.ones_like(ids)
+            torch.testing.assert_close(model(ids, mask)[:, :4], model(changed, mask)[:, :4])
+            with torch.no_grad():
+                expected = model(ids, mask)
+                logits, cache = model(ids[:, :3], mask[:, :3], use_cache=True)
+                torch.testing.assert_close(logits, expected[:, :3])
+                for end in range(4, 7):
+                    logits, cache = model(ids[:, end-1:end], mask[:, :end],
+                                          past_key_values=cache, use_cache=True)
+                    torch.testing.assert_close(logits, expected[:, end-1:end], atol=1e-6, rtol=1e-5)
+
+
+    @unittest.skipIf(_load_torch() is None, "torch is not installed")
+    def test_chunked_checkpointed_attention_matches_full_loss_and_gradients(self) -> None:
+        from gitctx.proof_lm_train import _build_model
+        torch = _load_torch()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _prepare_trainer_job(root, run_id="memory-test")
+            contract = json.loads((root / proof_trainer_job_path("memory-test")).read_text())["model_contract"]
+            contract["layers"] = 2
+            reference = _build_model(torch, contract)
+            efficient = _build_model(torch, contract, attention_chunk_size=3,
+                                     activation_checkpointing=True)
+            efficient.load_state_dict(reference.state_dict())
+            ids = torch.randint(0, contract["tokenizer_vocab_size"], (2, 11))
+            mask = torch.ones_like(ids)
+            mask[1, 8:] = 0
+            labels = ids.roll(-1, dims=1)
+            labels[:, :6] = -100
+            labels[mask == 0] = -100
+            logits = reference(ids, mask)
+            expected = torch.nn.functional.cross_entropy(logits.flatten(0, 1), labels.flatten())
+            actual = efficient(ids, mask, labels=labels)
+            torch.testing.assert_close(actual, expected)
+            expected.backward()
+            actual.backward()
+            for (name, left), (_, right) in zip(reference.named_parameters(), efficient.named_parameters()):
+                torch.testing.assert_close(left.grad, right.grad, atol=2e-6, rtol=2e-5, msg=name)
+
     def test_paths_are_stable(self) -> None:
         self.assertEqual(
             proof_lm_train_report_path("gctx1-proof-model.v0.dry-run"),
@@ -191,7 +284,7 @@ def _write_trainer_job(root: Path, *, run_id: str, tokenizer_vocab_size: int) ->
             "intermediate_size": 32,
             "activation": "silu",
             "normalization": "rmsnorm",
-            "position_encoding": "learned_absolute_for_fixture",
+            "position_encoding": "rope",
             "tie_input_output_embeddings": True,
         },
         "data_contract": {

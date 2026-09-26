@@ -69,10 +69,12 @@ thin CLI wrapper.
 Development agents must follow [AGENTS.md](AGENTS.md), including repository
 boundaries and signed commit/push synchronization after completed work.
 
-Run the current dependency-free test suite:
+Use the locked project environment to run the full suite, including the PyTorch
+training and evaluation tests:
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests
+uv sync --locked
+uv run --locked python -m unittest discover -s tests
 ```
 
 Run the first deterministic fixture evaluation:
@@ -125,9 +127,7 @@ make gctx1-proof-sft-smoke
 make gctx1-proof-sft-smoke-check
 make gctx1-proof-trainer-job
 make gctx1-proof-trainer-job-check
-uv venv .venv
-uv pip install -e .
-uv pip install torch
+uv sync --locked --python 3.12
 make gctx1-proof-lm-train PYTHON=".venv/bin/python" GITCTX_DATA_DIR="../gitctx-data" GCTX1_PROOF_LM_MAX_RECORDS=32 GCTX1_PROOF_LM_MAX_STEPS=8
 make gctx1-proof-lm-train-check PYTHON=".venv/bin/python" GITCTX_DATA_DIR="../gitctx-data"
 make gctx1-proof-smoke
@@ -163,6 +163,10 @@ See:
 - [docs/teacher-audit-plan.md](docs/teacher-audit-plan.md)
 - [docs/teacher-decisions/ollama-qwen2.5-coder-7b-smoke.md](docs/teacher-decisions/ollama-qwen2.5-coder-7b-smoke.md)
 - [docs/evaluation.md](docs/evaluation.md)
+- [docs/memorization-diagnostic.md](docs/memorization-diagnostic.md)
+- [docs/order-ablation.md](docs/order-ablation.md)
+- [docs/input-diagnostic.md](docs/input-diagnostic.md)
+- [docs/student-input.md](docs/student-input.md)
 - [docs/split-contract.md](docs/split-contract.md)
 - [docs/open-source-standard.md](docs/open-source-standard.md)
 - [docs/release-checklist.md](docs/release-checklist.md)
@@ -173,3 +177,6 @@ Code and documentation in this repository are licensed under the Apache License
 2.0 unless a file states otherwise. Model artifacts, generated labels, and
 datasets will carry release-specific licenses and cards after upstream license
 review.
+
+Lossless window preparation and local model review are documented in the
+[evidence window runbook](docs/evidence-window-review.md).

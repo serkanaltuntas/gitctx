@@ -18,6 +18,9 @@ import json
 import math
 from pathlib import Path
 import random
+import time
+import platform
+import subprocess
 from typing import Any
 
 from gitctx.proof_sequences import materialize_training_sequence
@@ -25,7 +28,7 @@ from gitctx.proof_train import DEFAULT_RUN_ID, SCHEMA_VERSION
 from gitctx.proof_train_job import proof_trainer_job_path
 
 TRAIN_RUN_DIR = Path("artifacts/train-runs")
-LM_TRAINER_ID = "gctx1-proof-lm-trainer-v0"
+LM_TRAINER_ID = "gctx1-proof-lm-trainer-v1"
 DEFAULT_DEVICE = "cpu"
 DEFAULT_TRAIN_SPLIT = "DEV"
 DEFAULT_BATCH_SIZE = 1
@@ -69,6 +72,10 @@ def run_proof_lm_training(
     max_steps: int | None = None,
     resume: bool = False,
     write: bool = False,
+    record_ids: list[str] | None = None,
+    attention_chunk_size: int = 256,
+    activation_checkpointing: bool = True,
+    checkpoint_every: int = 100,
     override_layers: int | None = None,
     override_hidden_size: int | None = None,
     override_attention_heads: int | None = None,
@@ -87,6 +94,8 @@ def run_proof_lm_training(
     if max_steps is not None:
         _validate_positive_int(max_steps, "max_steps")
 
+    _validate_positive_int(attention_chunk_size, "attention_chunk_size")
+    _validate_positive_int(checkpoint_every, "checkpoint_every")
     data_dir = Path(data_dir)
     job_path = data_dir / proof_trainer_job_path(run_id)
     job = _load_json(job_path)
@@ -113,10 +122,16 @@ def run_proof_lm_training(
             data_dir,
             job=job,
             train_split=DEFAULT_TRAIN_SPLIT,
-            max_records=max_records,
+            max_records=None if record_ids else max_records,
             context_tokens=model_contract["context_tokens"],
         )
         blockers.extend(sequence_blockers)
+        if record_ids:
+            by_id = {sequence["record_id"]: sequence for sequence in selected_sequences}
+            if len(set(record_ids)) != len(record_ids) or any(i not in by_id for i in record_ids):
+                blockers.append("record_ids must be distinct selected DEV records")
+            else:
+                selected_sequences = [by_id[i] for i in record_ids][:max_records]
     if not selected_sequences and not blockers:
         blockers.append("no DEV trainer sequences selected")
 
@@ -129,7 +144,25 @@ def run_proof_lm_training(
         max_steps=max_steps,
         model_contract=model_contract,
     )
-    config_sha = _stable_sha256(config)
+    config["record_ids"] = record_ids
+    config["execution"] = {
+        "attention_chunk_size": attention_chunk_size,
+        "activation_checkpointing": activation_checkpointing,
+        "precision": "float32",
+        "checkpoint_every": checkpoint_every,
+    }
+    config["seed"] = job.get("seed", 0)
+    config["input_hashes"] = {
+        name: entry.get("sha256", entry.get("actual_sha256"))
+        for name, entry in job.get("inputs", {}).items()
+    }
+    config["implementation_hashes"] = {
+        name: _sha256(Path(__file__).with_name(name))
+        for name in ("proof_lm_train.py", "proof_sequences.py", "proof_tokenizer.py")
+    }
+    config_sha = _resume_config_sha256(config)
+    if write and not resume and (data_dir / proof_lm_latest_checkpoint_path(run_id)).exists():
+        raise ValueError("run already has a checkpoint; use resume or a new run_id")
     if blockers:
         report = _blocked_report(
             run_id=run_id,
@@ -146,9 +179,12 @@ def run_proof_lm_training(
         return report
 
     assert torch is not None
+    _configure_device_runtime(torch, device)
     _seed_torch(torch, job.get("seed", 0))
-    model = _build_model(torch, model_contract).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    model = _build_model(torch, model_contract,
+                         attention_chunk_size=attention_chunk_size,
+                         activation_checkpointing=activation_checkpointing).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, foreach=False)
     state = _initial_state()
     resumed_from_checkpoint = False
     if resume:
@@ -156,7 +192,7 @@ def run_proof_lm_training(
         if not checkpoint_path.exists():
             raise ValueError("resume requested but latest checkpoint is missing")
         checkpoint = _load_json(checkpoint_path)
-        _load_checkpoint_state(
+        state = _load_checkpoint_state(
             torch,
             checkpoint,
             data_dir=data_dir,
@@ -166,7 +202,6 @@ def run_proof_lm_training(
             optimizer=optimizer,
             device=device,
         )
-        state = _state_from_checkpoint(checkpoint)
         resumed_from_checkpoint = True
 
     if state["record_cursor"] > len(selected_sequences):
@@ -174,20 +209,22 @@ def run_proof_lm_training(
 
     model.train()
     processed_this_run = 0
+    started = time.monotonic()
+    runtime = _runtime_info(torch, device, model)
+    if device == "cuda":
+        torch.cuda.reset_peak_memory_stats()
     while state["record_cursor"] < len(selected_sequences):
         if max_steps is not None and state["optimizer_steps"] >= max_steps:
             break
+        step_started = time.monotonic()
         batch_sequences = selected_sequences[
             state["record_cursor"]:state["record_cursor"] + batch_size
         ]
         batch = _batch_for_torch(torch, batch_sequences, device=device)
         optimizer.zero_grad(set_to_none=True)
-        logits = model(batch["input_ids"], batch["attention_mask"])
-        loss = torch.nn.functional.cross_entropy(
-            logits.reshape(-1, model_contract["tokenizer_vocab_size"]),
-            batch["labels"].reshape(-1),
-            ignore_index=-100,
-        )
+        loss = model(batch["input_ids"], batch["attention_mask"], labels=batch["labels"])
+        if not torch.isfinite(loss):
+            raise ValueError("non-finite training loss")
         loss.backward()
         optimizer.step()
 
@@ -201,6 +238,25 @@ def run_proof_lm_training(
         state["loss_sum"] += float(loss.detach().cpu()) * batch_loss_tokens
         state["last_record_id"] = batch_sequences[-1]["record_id"]
         processed_this_run += batch_records
+        elapsed = time.monotonic() - started
+        progress = {"step": state["optimizer_steps"], "record_cursor": state["record_cursor"],
+                    "records": len(selected_sequences), "input_length": batch["input_ids"].shape[1],
+                    "loss": float(loss.detach().cpu()), "elapsed_seconds": round(elapsed, 3),
+                    "step_seconds": round(time.monotonic() - step_started, 6)}
+        if device == "cuda":
+            progress["peak_allocated_bytes"] = torch.cuda.max_memory_allocated()
+            progress["peak_reserved_bytes"] = torch.cuda.max_memory_reserved()
+        print(json.dumps(progress, sort_keys=True), flush=True)
+        if write and state["optimizer_steps"] % checkpoint_every == 0:
+            interim = _trained_report(
+                run_id=run_id, status="partial", config=config, config_sha256=config_sha,
+                job_path=job_path, data_dir=data_dir, job=job, state=state,
+                selected_train_records=len(selected_sequences), processed_this_run=processed_this_run,
+                resumed_from_checkpoint=resumed_from_checkpoint)
+            interim["runtime"] = {**runtime, **progress}
+            _write_training_artifacts(torch, data_dir=data_dir, run_id=run_id, status="partial",
+                                      config=config, config_sha256=config_sha, report=interim,
+                                      state=state, model=model, optimizer=optimizer)
 
     status = "trained" if state["record_cursor"] >= len(selected_sequences) else "partial"
     report = _trained_report(
@@ -216,6 +272,10 @@ def run_proof_lm_training(
         processed_this_run=processed_this_run,
         resumed_from_checkpoint=resumed_from_checkpoint,
     )
+    report["runtime"] = {**runtime, "elapsed_seconds": time.monotonic() - started}
+    if device == "cuda":
+        report["runtime"].update(peak_allocated_bytes=torch.cuda.max_memory_allocated(),
+                                 peak_reserved_bytes=torch.cuda.max_memory_reserved())
     if write:
         _write_training_artifacts(
             torch,
@@ -387,6 +447,12 @@ def _model_contract_blockers(contract: dict[str, Any]) -> list[str]:
         blockers.append("model_contract.hidden_size must be divisible by attention_heads")
     if contract["attention_heads"] % contract["kv_heads"] != 0:
         blockers.append("model_contract.attention_heads must be divisible by kv_heads")
+    if contract.get("position_encoding") != "rope":
+        blockers.append("model_contract.position_encoding must be rope")
+    if (contract["hidden_size"] // contract["attention_heads"]) % 2:
+        blockers.append("RoPE requires an even attention head dimension")
+    if contract.get("tie_input_output_embeddings") is not True:
+        blockers.append("model_contract must tie input/output embeddings")
     return blockers
 
 
@@ -443,6 +509,7 @@ def _load_train_sequences(
         if not _sequence_matches_metadata(sequence, metadata):
             blockers.append(f"{record_id}: materialized sequence does not match metadata")
             continue
+        sequence.pop("tokens", None)
         sequences.append(sequence)
         if max_records is not None and len(sequences) >= max_records:
             break
@@ -452,7 +519,20 @@ def _load_train_sequences(
     return sequences, blockers
 
 
-def _build_model(torch: Any, contract: dict[str, Any]) -> Any:
+def _apply_rope(torch: Any, x: Any, positions: Any) -> Any:
+    """Rotate adjacent feature pairs; x has shape [batch, sequence, heads, dim]."""
+    head_dim = x.shape[-1]
+    frequencies = 10000.0 ** (-torch.arange(0, head_dim, 2, device=x.device).float() / head_dim)
+    angles = positions.float()[:, None] * frequencies[None, :]
+    cos = angles.cos().to(x.dtype)[None, :, None, :]
+    sin = angles.sin().to(x.dtype)[None, :, None, :]
+    even, odd = x[..., 0::2], x[..., 1::2]
+    return torch.stack((even * cos - odd * sin, even * sin + odd * cos), dim=-1).flatten(-2)
+
+
+def _build_model(torch: Any, contract: dict[str, Any], *,
+                 attention_chunk_size: int | None = None,
+                 activation_checkpointing: bool = False) -> Any:
     nn = torch.nn
     functional = torch.nn.functional
 
@@ -477,29 +557,47 @@ def _build_model(torch: Any, contract: dict[str, Any]) -> Any:
             self.v_proj = nn.Linear(hidden_size, kv_heads * self.head_dim, bias=False)
             self.o_proj = nn.Linear(hidden_size, hidden_size, bias=False)
 
-        def forward(self, x: Any, attention_mask: Any) -> Any:
+        def forward(self, x: Any, attention_mask: Any, past: Any = None, use_cache: bool = False) -> Any:
             batch, seq_len, _ = x.shape
             q = self.q_proj(x).view(batch, seq_len, self.attention_heads, self.head_dim)
             k = self.k_proj(x).view(batch, seq_len, self.kv_heads, self.head_dim)
             v = self.v_proj(x).view(batch, seq_len, self.kv_heads, self.head_dim)
+            past_length = past[0].shape[1] if past is not None else 0
+            positions = torch.arange(past_length, past_length + seq_len, device=x.device)
+            q = _apply_rope(torch, q, positions)
+            k = _apply_rope(torch, k, positions)
+            if past is not None:
+                k = torch.cat((past[0], k), dim=1)
+                v = torch.cat((past[1], v), dim=1)
+            present = (k, v) if use_cache else None
             repeat = self.attention_heads // self.kv_heads
             k = k.repeat_interleave(repeat, dim=2)
             v = v.repeat_interleave(repeat, dim=2)
             q = q.transpose(1, 2)
             k = k.transpose(1, 2)
             v = v.transpose(1, 2)
-            scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
-            causal_mask = torch.triu(
-                torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool),
-                diagonal=1,
-            )
-            scores = scores.masked_fill(causal_mask, torch.finfo(scores.dtype).min)
-            key_padding = attention_mask[:, None, None, :] == 0
-            scores = scores.masked_fill(key_padding, torch.finfo(scores.dtype).min)
-            attn = torch.softmax(scores, dim=-1)
-            attn = torch.nan_to_num(attn)
-            out = torch.matmul(attn, v).transpose(1, 2).contiguous()
-            return self.o_proj(out.view(batch, seq_len, -1))
+            chunk_size = attention_chunk_size or seq_len
+            chunks = []
+            for start in range(0, seq_len, chunk_size):
+                stop = min(start + chunk_size, seq_len)
+                # All causally visible keys are retained. Chunking only splits queries.
+                def attend(q_chunk, keys, values, key_mask, offset=past_length + start):
+                    scores = (q_chunk @ keys.transpose(-2, -1)) / math.sqrt(self.head_dim)
+                    query_pos = torch.arange(offset, offset + q_chunk.shape[-2], device=x.device)
+                    key_pos = torch.arange(keys.shape[-2], device=x.device)
+                    allowed = (key_pos[None, :] <= query_pos[:, None])[None, None, :, :]
+                    allowed = allowed & key_mask[:, None, None, :].bool()
+                    scores = scores.masked_fill(~allowed, torch.finfo(scores.dtype).min)
+                    return torch.softmax(scores, dim=-1) @ values
+                args = (q[:, :, start:stop], k[:, :, :past_length + stop], v[:, :, :past_length + stop], attention_mask[:, :past_length + stop])
+                if self.training and torch.is_grad_enabled() and seq_len > chunk_size:
+                    from torch.utils.checkpoint import checkpoint
+                    chunks.append(checkpoint(attend, *args, use_reentrant=False))
+                else:
+                    chunks.append(attend(*args))
+            out = torch.cat(chunks, dim=2).transpose(1, 2).contiguous()
+            result = self.o_proj(out.view(batch, seq_len, -1))
+            return (result, present) if use_cache else result
 
     class DecoderBlock(nn.Module):
         def __init__(self, hidden_size: int, attention_heads: int, kv_heads: int, intermediate: int) -> None:
@@ -511,11 +609,14 @@ def _build_model(torch: Any, contract: dict[str, Any]) -> Any:
             self.up_proj = nn.Linear(hidden_size, intermediate, bias=False)
             self.down_proj = nn.Linear(intermediate, hidden_size, bias=False)
 
-        def forward(self, x: Any, attention_mask: Any) -> Any:
-            x = x + self.attn(self.attn_norm(x), attention_mask)
+        def forward(self, x: Any, attention_mask: Any, past: Any = None, use_cache: bool = False) -> Any:
+            attended = self.attn(self.attn_norm(x), attention_mask, past, use_cache)
+            if use_cache:
+                attended, present = attended
+            x = x + attended
             hidden = self.mlp_norm(x)
             x = x + self.down_proj(functional.silu(self.gate_proj(hidden)) * self.up_proj(hidden))
-            return x
+            return (x, present) if use_cache else x
 
     class ProofDecoderLM(nn.Module):
         def __init__(self, selected_contract: dict[str, Any]) -> None:
@@ -523,7 +624,6 @@ def _build_model(torch: Any, contract: dict[str, Any]) -> Any:
             self.vocab_size = selected_contract["tokenizer_vocab_size"]
             hidden_size = selected_contract["hidden_size"]
             self.token_embedding = nn.Embedding(self.vocab_size, hidden_size)
-            self.position_embedding = nn.Embedding(selected_contract["context_tokens"], hidden_size)
             self.blocks = nn.ModuleList(
                 [
                     DecoderBlock(
@@ -536,14 +636,50 @@ def _build_model(torch: Any, contract: dict[str, Any]) -> Any:
                 ]
             )
             self.norm = RMSNorm(hidden_size)
+            self.apply(self._initialize)
 
-        def forward(self, input_ids: Any, attention_mask: Any) -> Any:
-            positions = torch.arange(input_ids.shape[1], device=input_ids.device)[None, :]
-            x = self.token_embedding(input_ids) + self.position_embedding(positions)
-            for block in self.blocks:
-                x = block(x, attention_mask)
+        @staticmethod
+        def _initialize(module: Any) -> None:
+            if isinstance(module, (nn.Linear, nn.Embedding)):
+                nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
+        def forward(self, input_ids: Any, attention_mask: Any, labels: Any = None,
+                    past_key_values: Any = None, use_cache: bool = False,
+                    last_token_only: bool = False, logit_positions: Any = None) -> Any:
+            if logit_positions is not None and (labels is not None or last_token_only):
+                raise ValueError("logit positions conflict with another output selection")
+            past_length = past_key_values[0][0].shape[1] if past_key_values else 0
+            if input_ids.shape[1] + past_length > contract["context_tokens"]:
+                raise ValueError("input exceeds model context")
+            x = self.token_embedding(input_ids)
+            presents = []
+            for index, block in enumerate(self.blocks):
+                if use_cache:
+                    past = past_key_values[index] if past_key_values else None
+                    x, present = block(x, attention_mask, past, True)
+                    presents.append(present)
+                elif activation_checkpointing and self.training and torch.is_grad_enabled():
+                    from torch.utils.checkpoint import checkpoint
+                    x = checkpoint(block, x, attention_mask, use_reentrant=False)
+                else:
+                    x = block(x, attention_mask)
             x = self.norm(x)
-            return torch.matmul(x, self.token_embedding.weight.transpose(0, 1))
+            if labels is not None:
+                active = labels != -100
+                # Ignored prompt/padding positions contribute zero gradient to the head.
+                logits = x[active] @ self.token_embedding.weight.transpose(0, 1)
+                return functional.cross_entropy(logits, labels[active])
+            if logit_positions is not None:
+                positions = torch.as_tensor(logit_positions, device=x.device)
+                if (positions.ndim != 1 or positions.numel() == 0
+                        or positions.dtype not in (torch.int32, torch.int64)
+                        or bool((positions < 0).any()) or bool((positions >= x.shape[1]).any())):
+                    raise ValueError("invalid logit positions")
+                x = x.index_select(1, positions.long())
+            if last_token_only:
+                x = x[:, -1:]
+            logits = torch.matmul(x, self.token_embedding.weight.transpose(0, 1))
+            return (logits, presents) if use_cache else logits
 
     return ProofDecoderLM(contract)
 
@@ -609,18 +745,22 @@ def _write_training_artifacts(
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     state_path = checkpoint_dir / f"step-{state['optimizer_steps']:06d}.pt"
+    temporary_state = state_path.with_suffix(".pt.tmp")
     torch.save(
         {
             "model_state": model.state_dict(),
             "optimizer_state": optimizer.state_dict(),
+            "scheduler_state": None,
             "trainer_state": state,
             "config": config,
             "torch_rng_state": torch.get_rng_state(),
+            "cuda_rng_state": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else [],
             "python_random_state": random.getstate(),
         },
-        state_path,
+        temporary_state,
     )
-    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary_state.replace(state_path)
+    _atomic_json(report_path, report)
     checkpoint = _checkpoint_manifest(
         run_id=run_id,
         status=status,
@@ -631,10 +771,21 @@ def _write_training_artifacts(
         state=state,
     )
     latest_path = data_dir / proof_lm_latest_checkpoint_path(run_id)
-    latest_path.write_text(json.dumps(checkpoint, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _atomic_json(latest_path, checkpoint)
     if status == "trained":
         final_path = data_dir / proof_lm_final_checkpoint_path(run_id)
-        final_path.write_text(json.dumps(checkpoint, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        _atomic_json(final_path, checkpoint)
+    elif (data_dir / proof_lm_final_checkpoint_path(run_id)).exists():
+        (data_dir / proof_lm_final_checkpoint_path(run_id)).unlink()
+    # Keep the current and previous durable states, not an unbounded weight archive.
+    for old in sorted(checkpoint_dir.glob("step-*.pt"))[:-2]:
+        old.unlink()
+
+
+def _atomic_json(path: Path, value: dict[str, Any]) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(path)
 
 
 def _write_report(data_dir: Path, report: dict[str, Any]) -> None:
@@ -653,7 +804,7 @@ def _load_checkpoint_state(
     model: Any,
     optimizer: Any,
     device: str,
-) -> None:
+) -> dict[str, Any]:
     if checkpoint.get("run_id") != run_id:
         raise ValueError("resume checkpoint run_id mismatch")
     if checkpoint.get("trainer_id") != LM_TRAINER_ID:
@@ -663,16 +814,18 @@ def _load_checkpoint_state(
     state_path = _data_path(data_dir, Path(str(checkpoint.get("state_path"))))
     if checkpoint.get("state_sha256") != _sha256(state_path):
         raise ValueError("resume checkpoint state sha256 mismatch")
-    try:
-        state = torch.load(state_path, map_location=device, weights_only=False)
-    except TypeError:  # pragma: no cover - older torch fallback
-        state = torch.load(state_path, map_location=device)
+    state = torch.load(state_path, map_location="cpu", weights_only=True)
+    if _resume_config_sha256(state["config"]) != config_sha256:
+        raise ValueError("resume checkpoint embedded config mismatch")
     model.load_state_dict(state["model_state"])
     optimizer.load_state_dict(state["optimizer_state"])
     if "torch_rng_state" in state:
         torch.set_rng_state(state["torch_rng_state"].cpu())
     if "python_random_state" in state:
         random.setstate(state["python_random_state"])
+    if device == "cuda" and state.get("cuda_rng_state"):
+        torch.cuda.set_rng_state_all(state["cuda_rng_state"])
+    return state["trainer_state"]
 
 
 def _checkpoint_manifest(
@@ -706,6 +859,14 @@ def _checkpoint_manifest(
     }
 
 
+def _resume_config_sha256(config: dict[str, Any]) -> str:
+    # Limits cap a deterministic prefix; increasing them must preserve prior work.
+    return _stable_sha256({
+        key: value for key, value in config.items()
+        if key not in {"device", "max_steps", "max_records", "execution"}
+    })
+
+
 def _training_config(
     *,
     run_id: str,
@@ -728,6 +889,7 @@ def _training_config(
         "model_contract": model_contract,
         "loss": "causal_cross_entropy_on_assistant_tokens",
         "optimizer": "adamw",
+        "learning_rate_schedule": "constant",
     }
 
 
@@ -922,6 +1084,27 @@ def _device_blockers(torch: Any, device: str) -> list[str]:
     return []
 
 
+def _configure_device_runtime(torch: Any, device: str) -> None:
+    if device == "cuda" and torch.cuda.get_device_capability()[0] < 8:
+        # Recent PyTorch eager bmm dispatch can select Triton even on older GPUs.
+        # Keep the numerically equivalent compiled CUDA path on these devices.
+        native = getattr(torch.backends, "python_native", None)
+        if native is not None and hasattr(native, "triton"):
+            native.triton.enabled = False
+
+
+def _runtime_info(torch: Any, device: str, model: Any) -> dict[str, Any]:
+    revision = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True)
+    return {"python": platform.python_version(), "torch": str(torch.__version__),
+            "cuda_runtime": torch.version.cuda, "device": device,
+            "device_name": torch.cuda.get_device_name() if device == "cuda" else device,
+            "parameter_count": sum(p.numel() for p in model.parameters()),
+            "training_code_revision": revision.stdout.strip() if revision.returncode == 0 else None,
+            "implementation_hashes_are_authoritative": True,
+            "python_native_triton_enabled": getattr(
+                getattr(getattr(torch.backends, "python_native", None), "triton", None), "enabled", None)}
+
+
 def _seed_torch(torch: Any, seed: Any) -> None:
     selected_seed = seed if isinstance(seed, int) and seed >= 0 else 0
     random.seed(selected_seed)
@@ -1012,6 +1195,10 @@ def main(argv: list[str] | None = None) -> int:
     train.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE)
     train.add_argument("--max-records", type=int)
     train.add_argument("--max-steps", type=int)
+    train.add_argument("--record-id", action="append")
+    train.add_argument("--attention-chunk-size", type=int, default=256)
+    train.add_argument("--no-activation-checkpointing", action="store_true")
+    train.add_argument("--checkpoint-every", type=int, default=100)
     train.add_argument("--resume", action="store_true")
     train.add_argument("--write", action="store_true")
     train.add_argument("--fail-on-blocked", action="store_true")
@@ -1035,6 +1222,10 @@ def main(argv: list[str] | None = None) -> int:
             learning_rate=args.learning_rate,
             max_records=args.max_records,
             max_steps=args.max_steps,
+            record_ids=args.record_id,
+            attention_chunk_size=args.attention_chunk_size,
+            activation_checkpointing=not args.no_activation_checkpointing,
+            checkpoint_every=args.checkpoint_every,
             resume=args.resume,
             write=args.write,
             override_layers=args.override_layers,

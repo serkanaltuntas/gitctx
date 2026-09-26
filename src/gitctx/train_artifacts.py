@@ -18,6 +18,7 @@ from gitctx.provenance import (
     validate_teacher_input_record,
 )
 from gitctx.teacher_inputs import source_diffs_path, teacher_inputs_path
+from gitctx.student_input import PROMPT_VERSION, review_provenance, student_messages
 
 TRAIN_ARTIFACT_DIR = Path("artifacts/train")
 TRAINING_INSTRUCTION = "Write one Conventional Commit message for the provided Git diff."
@@ -25,6 +26,9 @@ TRAINING_LABEL_SOURCES = frozenset(
     {
         "teacher_generated_human_accepted",
         "teacher_generated_human_edited",
+        "teacher_generated_automated_accepted",
+        "teacher_generated_unverified_accepted",
+        "teacher_generated_unverified_edited",
     }
 )
 
@@ -452,6 +456,19 @@ def validate_training_record(record: dict[str, Any]) -> tuple[str, ...]:
         errors.append("messages roles must be system, user, assistant")
     elif messages[2].get("content") != record.get("target_message"):
         errors.append("assistant message does not match target_message")
+    if "student_prompt_version" in record:
+        if record["student_prompt_version"] != PROMPT_VERSION:
+            errors.append("unsupported student prompt version")
+        else:
+            try:
+                expected_messages = student_messages(record)
+            except (KeyError, ValueError, TypeError):
+                errors.append("invalid structured student input")
+            else:
+                if not isinstance(messages, list) or messages[:2] != expected_messages:
+                    errors.append("student input differs from the shared inference contract")
+        if not isinstance(record.get("review_provenance"), dict):
+            errors.append("student artifacts require explicit review provenance")
     diff = record.get("diff")
     diff_sha256 = record.get("diff_sha256")
     if isinstance(diff, str) and isinstance(diff_sha256, str):
@@ -514,16 +531,15 @@ def _build_training_record(
         "instruction": TRAINING_INSTRUCTION,
         "diff": teacher_input["diff"],
         "diff_sha256": teacher_input["diff_sha256"],
-        "messages": [
-            {"role": "system", "content": teacher_input["system_message"]},
-            {"role": "user", "content": teacher_input["user_message"]},
-            {"role": "assistant", "content": target_message},
-        ],
+        "messages": student_messages({**source, "diff": teacher_input["diff"]})
+                    + [{"role": "assistant", "content": target_message}],
+        "student_prompt_version": PROMPT_VERSION,
         "target_header": target_header,
         "target_body": target_body,
         "target_footers": target_footers,
         "target_message": target_message,
-        "label_source": _label_source(decision),
+        "label_source": _label_source(review),
+        "review_provenance": review_provenance(review),
         "review_decision": decision,
         "review_issues": review["issues"],
         "review_notes": review["notes"],
@@ -580,6 +596,11 @@ def _validate_training_record_lineage(
         errors.append("reviewer does not match review")
     if record.get("review_timestamp") != review.get("review_timestamp"):
         errors.append("review_timestamp does not match review")
+    if "review_provenance" in record:
+        if record["review_provenance"] != review_provenance(review):
+            errors.append("review provenance does not match explicit review evidence")
+        if record["label_source"] != _label_source(review):
+            errors.append("label source does not match review method")
     if review.get("decision") == "accept" and record.get("target_header") != label.get("header"):
         errors.append("accepted target_header does not match generated label")
     if review.get("decision") == "edit":
@@ -600,11 +621,19 @@ def _source_diff_id_from_generated_label_id(label_id: str) -> str:
     return label_id.removeprefix("generated-")
 
 
-def _label_source(decision: str) -> str:
+def _label_source(review: dict[str, Any]) -> str:
+    decision = review["decision"]
+    provenance = review_provenance(review)
+    if provenance["independent_factuality_review"]:
+        kind = "human"
+    elif provenance["method"] == "deterministic_parser_policy" and decision == "accept":
+        kind = "automated"
+    else:
+        kind = "unverified"
     if decision == "accept":
-        return "teacher_generated_human_accepted"
+        return f"teacher_generated_{kind}_accepted"
     if decision == "edit":
-        return "teacher_generated_human_edited"
+        return f"teacher_generated_{kind}_edited"
     raise ValueError(f"unsupported training label decision: {decision}")
 
 

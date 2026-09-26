@@ -51,6 +51,16 @@
     "parser_result"
   ],
   "properties": {
+    "student_prompt_version": {"const": "commit-student-v1"},
+    "review_provenance": {
+      "type": "object",
+      "required": ["method", "reviewer_kind", "independent_factuality_review"],
+      "properties": {
+        "method": {"enum": ["deterministic_parser_policy", "independent_diff_review", "legacy_unspecified"]},
+        "reviewer_kind": {"enum": ["automation", "human", "unknown"]},
+        "independent_factuality_review": {"type": "boolean"}
+      }
+    },
     "id": {"type": "string", "minLength": 1},
     "artifact_name": {"type": "string", "minLength": 1},
     "artifact_version": {"type": "string", "minLength": 1},
@@ -95,7 +105,10 @@
       "type": "string",
       "enum": [
         "teacher_generated_human_accepted",
-        "teacher_generated_human_edited"
+        "teacher_generated_human_edited",
+        "teacher_generated_automated_accepted",
+        "teacher_generated_unverified_accepted",
+        "teacher_generated_unverified_edited"
       ]
     },
     "review_decision": {"type": "string", "enum": ["accept", "edit"]},

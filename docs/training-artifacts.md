@@ -225,19 +225,17 @@ It requires a PyTorch runtime, reads the ready trainer job manifest, verifies
 input hashes, re-materializes deterministic DEV sequences from the lineage
 artifacts, and trains with causal cross entropy only over assistant loss tokens.
 The first backend implements the proof architecture directly enough to exercise
-the real checkpoint/resume surface: token embeddings, learned positions, RMSNorm,
+the real checkpoint/resume surface: token embeddings, rotary positions (RoPE), RMSNorm,
 GQA causal self-attention, SwiGLU MLP blocks, tied output weights, AdamW, and
 deterministic cursor-based resume. Use `GCTX1_PROOF_LM_MAX_RECORDS` and
 `GCTX1_PROOF_LM_MAX_STEPS` for bounded CPU smoke runs. A full unbounded run is
 the expensive proof-model training job and still needs locked `REPORT`
 evaluation before any quality claim.
 
-On training workers with `uv`, prepare the optional PyTorch runtime explicitly:
+On training workers with `uv`, install the pinned project runtime:
 
 ```bash
-uv venv .venv
-uv pip install -e .
-uv pip install torch
+uv sync --locked --python 3.12
 ```
 
 Then run bounded proof LM training from the public repository while writing
@@ -251,6 +249,33 @@ make gctx1-proof-lm-train \
   GCTX1_PROOF_LM_MAX_STEPS=8
 make gctx1-proof-lm-train-check PYTHON=".venv/bin/python" GITCTX_DATA_DIR="../gitctx-data"
 ```
+
+The uv lock selects PyTorch 2.13.0 with CUDA 12.6 on Linux x86_64, and the
+standard PyPI package on other platforms (including macOS/MPS). GPU usability
+must be tested on the worker; the driver-reported CUDA version is not sufficient.
+On CUDA devices below compute capability 8.0, the trainer disables PyTorch's
+Python-native Triton operator overrides and retains compiled CUDA implementations.
+This avoids unsupported eager dispatch on legacy hardware; no local Triton kernel
+compilation or reduced model/context is required.
+The trainer currently uses FP32 for portability to older GPUs. Query-chunked
+attention, block/attention recomputation and projecting only supervised token
+positions reduce memory without shortening context or changing the loss.
+
+Trainer v1 uses RoPE and a conventional 0.02 normal initialization. Old v0
+learned-position checkpoints are deliberately incompatible. Use a new run ID.
+Resume checks model, optimizer settings, seed, input and implementation hashes;
+`--max-steps` is a cumulative limit and can be increased or omitted. `--max-records`
+can expand the same deterministic prefix. Device and memory execution settings
+are recorded but do not invalidate resume. Exact equality is tested on the same
+CPU runtime; cross-device arithmetic need not be bit-identical.
+
+`--checkpoint-every 100` saves during training. The latest two weight states are
+retained locally; weights are not committed. AdamW uses a constant learning rate
+(no scheduler). A run without limits makes one full pass over the selected DEV
+records. `--record-id` is only for explicitly bounded diagnostic selections;
+full proof runs must omit it and both limits. Reports include actual parameter
+count, execution time, software versions and CUDA peak memory. Checkpoint state
+files are loaded with PyTorch's restricted weights-only deserializer.
 
 `gctx1-proof-smoke` runs the dependency-free prototype and tiny-softmax smoke
 models against `gctx1-strict`. It is still a pipeline proof, not the 60M-100M
@@ -353,3 +378,22 @@ The first GCTX-scale proof artifact card and output-use decision are:
 
 - [`data-cards/gctx1-v0.md`](data-cards/gctx1-v0.md)
 - [`output-use-decisions/gctx1-v0.md`](output-use-decisions/gctx1-v0.md)
+
+## Complete proof worker
+
+For a ready job with a new run ID, `scripts/run-proof-job.sh DATA_DIR RUN_ID cuda`
+runs one full DEV pass, validates the final state, then greedily generates every
+locked REPORT prediction. Existing checkpoints are resumed after compatibility
+checks. Run without diagnostic record or step limits. The worker does not publish
+artifacts or retrain based on REPORT scores.
+
+Evaluation reserves 256 output tokens inside the 8,192-token context. Only
+system/user text determines the prompt; long user inputs use deterministic
+prefix/suffix cropping. Gold contents and gold length never set this budget.
+Predictions are persisted incrementally and can resume with identical checkpoint,
+code and decoding settings. The six contract metrics are reported, along with
+raw token exact-match and unknown scope counts. The frozen regex tokenizer loses
+whitespace, so text reconstruction is heuristic and exact textual equality has
+that limitation. Scope/specificity checks are proxies, not semantic correctness
+judgments. Record results and limitations in private model/eval cards before
+considering a public claim.
