@@ -94,6 +94,17 @@ Only real DEV records are eligible. Teachers must have an explicitly reviewed
 Apache-2.0 license, a pinned installed digest and matching tokenizer. Generated
 output licensing still needs a release-specific review before redistribution.
 
+`grounded_targets.generate` provides a separate versioned JSON-header prompt
+that explicitly distinguishes documentation, tests, annotations, preserved
+context and actual runtime changes. It preserves the original complete unified
+diff and excludes references, historical subjects and reviewer notes. It supports
+teacher contexts up to 32,768 tokens, checks the installed model's advertised
+context capacity, and verifies runtime prompt token counts. This does not enlarge
+the student's 8,192-token context or 256-token answer reserve. Pin the module,
+decoder, schema dependency, tokenizer, teacher metadata and generation settings
+in the experiment protocol. Prior prompt versions remain available for replay.
+The stricter instructions are a generation method, not a factuality guarantee.
+
 `reference_overlay.build_override` binds a selected candidate to an explicit
 full-diff semantic attestation. It reconstructs the message from the raw teacher
 JSON fields and refuses substituted reviewer text. Each target line must have
