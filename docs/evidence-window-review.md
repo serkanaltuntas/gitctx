@@ -142,3 +142,10 @@ Both prompts, context choices, termination reasons and expected/runtime token
 counts must replay; an incomplete comparison makes the candidate invalid.
 Reviewers still assess the final header against the full source. Pin this
 module together with its grounded-prompt, schema and decoder dependencies.
+
+The [joint window likelihood](window-mixture.md) is an explicit aggregation
+alternative. It keeps the one commit reference at group level and combines
+probabilities from every source window before computing loss or choosing each
+output token. Its arithmetic, causal shift, gradients, source coverage and
+cached/full-replay equivalence have separate checks; it does not claim semantic
+quality or make unresolved references eligible for training.

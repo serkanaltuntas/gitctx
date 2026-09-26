@@ -645,7 +645,9 @@ def _build_model(torch: Any, contract: dict[str, Any], *,
 
         def forward(self, input_ids: Any, attention_mask: Any, labels: Any = None,
                     past_key_values: Any = None, use_cache: bool = False,
-                    last_token_only: bool = False) -> Any:
+                    last_token_only: bool = False, logit_positions: Any = None) -> Any:
+            if logit_positions is not None and (labels is not None or last_token_only):
+                raise ValueError("logit positions conflict with another output selection")
             past_length = past_key_values[0][0].shape[1] if past_key_values else 0
             if input_ids.shape[1] + past_length > contract["context_tokens"]:
                 raise ValueError("input exceeds model context")
@@ -667,6 +669,13 @@ def _build_model(torch: Any, contract: dict[str, Any], *,
                 # Ignored prompt/padding positions contribute zero gradient to the head.
                 logits = x[active] @ self.token_embedding.weight.transpose(0, 1)
                 return functional.cross_entropy(logits, labels[active])
+            if logit_positions is not None:
+                positions = torch.as_tensor(logit_positions, device=x.device)
+                if (positions.ndim != 1 or positions.numel() == 0
+                        or positions.dtype not in (torch.int32, torch.int64)
+                        or bool((positions < 0).any()) or bool((positions >= x.shape[1]).any())):
+                    raise ValueError("invalid logit positions")
+                x = x.index_select(1, positions.long())
             if last_token_only:
                 x = x[:, -1:]
             logits = torch.matmul(x, self.token_embedding.weight.transpose(0, 1))
