@@ -78,3 +78,19 @@ class ReviewedTrainingTests(TestCase):
             self.assertEqual(list(Path(root).iterdir()), [])
             for key, value in before.items():
                 self.torch.testing.assert_close(value, model.state_dict()[key], rtol=0, atol=0)
+
+    def test_checkpoint_retention_is_bounded_and_never_sweeps_untracked_files(self):
+        with tempfile.TemporaryDirectory() as root:
+            model, optimizer = self.pair()
+            options = {**self.options, 'checkpoint_every':1, 'keep_checkpoints':2}
+            rt.run_epochs(self.torch, self.ds, model, optimizer, checkpoint_dir=root, max_steps=1, **options)
+            unrelated = Path(root)/'unrelated.pt'; unrelated.write_bytes(b'preserve me')
+            done = rt.run_epochs(self.torch, self.ds, model, optimizer, checkpoint_dir=root, resume=True, **options)
+            self.assertTrue(done['complete'])
+            self.assertEqual(len(list(Path(root).glob('step-*.pt'))), 2)
+            self.assertEqual(unrelated.read_bytes(), b'preserve me')
+            import json
+            manifest = json.loads((Path(root)/'latest.json').read_text())
+            self.assertEqual(len(manifest['retained_states']), 2)
+            self.assertEqual({item['state_file'] for item in manifest['retained_states']},
+                             {path.name for path in Path(root).glob('step-*.pt')})

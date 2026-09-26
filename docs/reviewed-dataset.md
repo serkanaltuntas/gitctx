@@ -33,7 +33,10 @@ audit and a separately selected budget remain required before real training.
 `reviewed_training.run_epochs()` supplies a bounded 1/2/4-epoch loop: one update
 per complete commit, seeded shuffling, gradient clipping and exact joint validation
 likelihood. Checkpoints bind dataset and run identity, optimizer settings, parameter
-shapes, RNG state and an exact epoch cursor. State files are immutable and hashed;
+shapes, RNG state and an exact epoch cursor. State files are immutable and hashed; the last two successful checkpoints are
+retained by default, bounding disk growth. Retention deletes only previously
+manifested files with matching hashes, after the new manifest is committed;
+untracked files are preserved.
 `latest.json` is replaced atomically. Resume refuses changed input identities or
 checkpoint bytes. A bounded invocation may stop mid-epoch and continue with the
 same order and optimizer state. This API requires an explicit execution flag;

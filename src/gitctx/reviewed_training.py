@@ -20,8 +20,16 @@ def _hash(path):
         return hashlib.file_digest(handle, 'sha256').hexdigest()
 
 
-def _save(torch, directory, model, optimizer, state, identity, device):
+def _save(torch, directory, model, optimizer, state, identity, device, keep_checkpoints):
     directory.mkdir(parents=True, exist_ok=True)
+    prior = []
+    latest = directory / 'latest.json'
+    if latest.exists():
+        previous = json.loads(latest.read_text())
+        if previous.get('identity') != identity:
+            raise ValueError('checkpoint directory belongs to a different run')
+        prior = previous.get('retained_states', [{'state_file': previous['state_file'],
+                                                'state_sha256': previous['state_sha256']}])
     # Immutable step files make an interrupted latest-manifest update recoverable.
     stem = f"step-{state['steps']:08d}-epoch-{state['epoch']:02d}"
     path = directory / (stem + '.pt')
@@ -35,13 +43,27 @@ def _save(torch, directory, model, optimizer, state, identity, device):
         temporary.unlink()
         raise ValueError('checkpoint step already exists')
     temporary.replace(path)
-    manifest = {'version': VERSION, 'identity': identity, 'state_file': path.name,
+    retained = prior + [{'state_file': path.name, 'state_sha256': _hash(path)}]
+    discarded, retained = retained[:-keep_checkpoints], retained[-keep_checkpoints:]
+    manifest = {'retained_states': retained, 'version': VERSION, 'identity': identity, 'state_file': path.name,
                 'state_sha256': _hash(path), 'steps': state['steps'], 'epoch': state['epoch']}
     target = directory / 'latest.json'
     temporary_manifest = directory / 'latest.json.partial'
     with temporary_manifest.open('x') as handle:
         json.dump(manifest, handle, indent=2); handle.write('\n')
     temporary_manifest.replace(target)
+    # Delete only files listed by this run's previously successful manifest,
+    # after the new checkpoint is authoritative. Never sweep directory globs.
+    for item in discarded:
+        old_name = item['state_file']
+        old = directory / old_name
+        if (Path(old_name).name != old_name or not old.resolve().is_relative_to(directory.resolve())
+                or old_name == path.name):
+            raise ValueError('invalid retained checkpoint path')
+        if old.exists():
+            if _hash(old) != item['state_sha256']:
+                raise ValueError('old checkpoint changed; refusing to delete it')
+            old.unlink()
 
 
 def _restore(torch, directory, model, optimizer, identity, device):
@@ -70,7 +92,7 @@ def _restore(torch, directory, model, optimizer, identity, device):
 
 def run_epochs(torch, dataset, model, optimizer, *, device, epochs, seed,
                checkpoint_dir, run_contract, training_authorized=False,
-               resume=False, max_steps=None, checkpoint_every=100, max_grad_norm=1.0):
+               resume=False, max_steps=None, checkpoint_every=100, max_grad_norm=1.0, keep_checkpoints=2):
     """One optimizer update per complete commit; window count never reweights it.
 
     ``max_steps`` bounds this invocation, not the total resumable experiment.
@@ -85,6 +107,8 @@ def run_epochs(torch, dataset, model, optimizer, *, device, epochs, seed,
         raise ValueError('seed and pinned run contract required')
     if type(checkpoint_every) is not int or checkpoint_every <= 0:
         raise ValueError('checkpoint interval must be positive')
+    if type(keep_checkpoints) is not int or keep_checkpoints < 2:
+        raise ValueError('retain at least the current and previous checkpoints')
     if max_steps is not None and (type(max_steps) is not int or max_steps <= 0):
         raise ValueError('invocation step limit must be positive')
     if not math.isfinite(max_grad_norm) or max_grad_norm <= 0:
@@ -95,7 +119,8 @@ def run_epochs(torch, dataset, model, optimizer, *, device, epochs, seed,
     directory = Path(checkpoint_dir)
     identity = artifact_hash({'version': VERSION, 'dataset': dataset.fingerprint,
         'epochs': epochs, 'seed': seed, 'run_contract': run_contract,
-        'max_grad_norm': max_grad_norm,
+        'max_grad_norm': max_grad_norm, 'keep_checkpoints': keep_checkpoints,
+        'checkpoint_every': checkpoint_every,
         'optimizer_class': type(optimizer).__module__ + '.' + type(optimizer).__qualname__,
         'optimizer_groups': [{k: v for k, v in group.items() if k != 'params'} for group in optimizer.param_groups],
         'parameters': [(name, list(p.shape), str(p.dtype)) for name, p in model.named_parameters()]})
@@ -143,7 +168,7 @@ def run_epochs(torch, dataset, model, optimizer, *, device, epochs, seed,
             state.update(epoch=state['epoch']+1, cursor=0, train_nll=0.0, train_tokens=0)
         limit = max_steps is not None and invocation_steps >= max_steps
         if completed_epoch or limit or state['steps'] % checkpoint_every == 0:
-            _save(torch, directory, model, optimizer, state, identity, device)
+            _save(torch, directory, model, optimizer, state, identity, device, keep_checkpoints)
         if limit:
             break
     return {'version': VERSION, 'identity': identity, 'complete': state['epoch'] == epochs,
