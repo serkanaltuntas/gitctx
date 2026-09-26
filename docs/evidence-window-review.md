@@ -132,3 +132,13 @@ prompt, fixed answer reserve and assistant-only loss mask. It explicitly rejects
 long inputs; it never copies a whole-commit target onto partial windows. A
 separate window alignment or verified aggregation path remains required before
 those inputs can be consumed by a trainer.
+
+`reasoned_targets.generate` is a separate two-stage option. The same licensed
+open teacher first compares the complete before/after diff, then generates a
+JSON commit header from the complete diff and its own unverified comparison.
+Neither stage sees reference labels or assistant review notes. The comparison
+is preserved as raw teacher output and is never a training target or approval.
+Both prompts, context choices, termination reasons and expected/runtime token
+counts must replay; an incomplete comparison makes the candidate invalid.
+Reviewers still assess the final header against the full source. Pin this
+module together with its grounded-prompt, schema and decoder dependencies.
