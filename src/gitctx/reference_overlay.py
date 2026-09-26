@@ -7,6 +7,7 @@ import json
 from gitctx.conventional import parse_commit_message, DEFAULT_TYPES
 from gitctx.reference_review import sha
 from gitctx.student_sequences import physical_lines, diff_units
+from gitctx.teacher_response import decode_response
 
 
 def artifact_hash(value):
@@ -22,12 +23,11 @@ def build_override(record,candidate,attestation,tokenizer,*,teacher_revision):
         or candidate.get('validation_errors') or not candidate.get('model_digest') or not teacher_revision
         or not isinstance(target,str) or candidate.get('target_sha256')!=sha(target)):
         raise ValueError('candidate source/provenance mismatch')
-    # Reference text must be mechanically reconstructed from the teacher's raw
-    # fields, not a replacement string authored by the reviewer.
-    fields=json.loads(candidate['response']['response'])
+    # Reference text must come from the teacher's raw fields or plain response,
+    # never a replacement string authored by the reviewer.
+    fields,expected=decode_response(candidate['response']['response'],candidate.get('output_format','json'))
     if fields!=candidate.get('fields') or fields.get('type') not in DEFAULT_TYPES:
         raise ValueError('teacher fields changed')
-    expected=fields['type']+(f"({fields['scope']})" if fields['scope'] else '')+': '+fields['subject']
     if target!=expected:raise ValueError('replacement differs from teacher output')
     parse_commit_message(target)
     if len(tokenizer.encode(target))+1>256:raise ValueError('answer reserve exceeded')
