@@ -2,6 +2,7 @@ from copy import deepcopy
 from pathlib import Path
 import tempfile
 from unittest import TestCase
+from unittest.mock import patch
 
 from gitctx import reviewed_training as rt
 from gitctx.proof_lm_train import _build_model, _load_torch
@@ -94,3 +95,42 @@ class ReviewedTrainingTests(TestCase):
             self.assertEqual(len(manifest['retained_states']), 2)
             self.assertEqual({item['state_file'] for item in manifest['retained_states']},
                              {path.name for path in Path(root).glob('step-*.pt')})
+
+    def test_interrupted_save_replays_from_latest_without_overwriting_orphans(self):
+        for failure in ('state', 'manifest'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as root:
+                directory = Path(root)
+                model, optimizer = self.pair()
+                rt.run_epochs(self.torch, self.ds, model, optimizer, checkpoint_dir=root,
+                              max_steps=1, **self.options)
+                latest_before = (directory/'latest.json').read_bytes()
+                original_replace = Path.replace
+
+                def interrupt(path, target):
+                    if (failure == 'state' and str(target).endswith('.pt')
+                            or failure == 'manifest' and Path(target).name == 'latest.json'):
+                        raise OSError('simulated interrupted save')
+                    return original_replace(path, target)
+
+                with patch.object(Path, 'replace', interrupt), self.assertRaisesRegex(OSError, 'interrupted'):
+                    rt.run_epochs(self.torch, self.ds, model, optimizer, checkpoint_dir=root,
+                                  resume=True, max_steps=1, **self.options)
+                self.assertEqual((directory/'latest.json').read_bytes(), latest_before)
+                import json
+                managed = json.loads(latest_before)['state_file']
+                orphans = {p.name: p.read_bytes() for p in directory.iterdir()
+                           if p.name not in (managed, 'latest.json')}
+                self.assertTrue(orphans)
+                resumed, resumed_optimizer = self.pair()
+                done = rt.run_epochs(self.torch, self.ds, resumed, resumed_optimizer,
+                                     checkpoint_dir=root, resume=True, **self.options)
+                self.assertTrue(done['complete'])
+                baseline, baseline_optimizer = self.pair()
+                with tempfile.TemporaryDirectory() as other:
+                    expected = rt.run_epochs(self.torch, self.ds, baseline, baseline_optimizer,
+                                             checkpoint_dir=other, **self.options)
+                self.assertEqual(done['metrics'], expected['metrics'])
+                for x, y in zip(baseline.parameters(), resumed.parameters()):
+                    self.torch.testing.assert_close(x, y, rtol=0, atol=0)
+                for name, content in orphans.items():
+                    self.assertEqual((directory/name).read_bytes(), content)

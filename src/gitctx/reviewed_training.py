@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import random
+import uuid
 
 from gitctx.reference_overlay import artifact_hash
 from gitctx.reviewed_dataset import backward_example, score_example
@@ -31,7 +32,10 @@ def _save(torch, directory, model, optimizer, state, identity, device, keep_chec
         prior = previous.get('retained_states', [{'state_file': previous['state_file'],
                                                 'state_sha256': previous['state_sha256']}])
     # Immutable step files make an interrupted latest-manifest update recoverable.
-    stem = f"step-{state['steps']:08d}-epoch-{state['epoch']:02d}"
+    # An interrupted save can leave either a partial file or an unreferenced
+    # complete state. Preserve those bytes and allow replay from latest.json
+    # to save the same logical step under a fresh attempt identity.
+    stem = f"step-{state['steps']:08d}-epoch-{state['epoch']:02d}-{uuid.uuid4().hex}"
     path = directory / (stem + '.pt')
     temporary = directory / (stem + '.partial')
     payload = {'identity': identity, 'state': state, 'model': model.state_dict(),
@@ -48,7 +52,7 @@ def _save(torch, directory, model, optimizer, state, identity, device, keep_chec
     manifest = {'retained_states': retained, 'version': VERSION, 'identity': identity, 'state_file': path.name,
                 'state_sha256': _hash(path), 'steps': state['steps'], 'epoch': state['epoch']}
     target = directory / 'latest.json'
-    temporary_manifest = directory / 'latest.json.partial'
+    temporary_manifest = directory / (stem + '.manifest.partial')
     with temporary_manifest.open('x') as handle:
         json.dump(manifest, handle, indent=2); handle.write('\n')
     temporary_manifest.replace(target)
